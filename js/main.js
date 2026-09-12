@@ -24,7 +24,22 @@ const G = {
   speedMul: 1,
 };
 
-$("ver-tag").textContent = "v" + TOWERCLASH_VERSION;
+$("ver-tag").textContent = "v" + TOWERCLASH_VERSION + " ・更新情報";
+$("ver-tag").onclick = () => { renderPatchNotes(); showScreen("s-patchnotes"); };
+$("btn-patchnotes-back").onclick = () => showScreen("s-title");
+function renderPatchNotes() {
+  const list = $("patch-list");
+  list.innerHTML = "";
+  CHANGELOG.forEach((entry) => {
+    const card = document.createElement("div");
+    card.className = "patch-entry";
+    card.innerHTML = `
+      <div class="patch-head"><span class="patch-version">v${entry.version}</span><span class="patch-date">${entry.date}</span></div>
+      <ul class="patch-notes">${entry.notes.map((n) => `<li>${n}</li>`).join("")}</ul>
+    `;
+    list.appendChild(card);
+  });
+}
 
 // ===== 倍速コントロール(ホスト権威: オンライン対戦ではホストのみ変更可) =====
 document.querySelectorAll("#speed-ctrl .speed-btn").forEach((btn) => {

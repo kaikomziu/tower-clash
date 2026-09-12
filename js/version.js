@@ -1,6 +1,13 @@
 // ===== 更新履歴 =====
-const TOWERCLASH_VERSION = "3.0.0";
+const TOWERCLASH_VERSION = "3.1.0";
 const CHANGELOG = [
+  {
+    version: "3.1.0",
+    date: "2026-09-13",
+    notes: [
+      "タイトル画面から「📜更新情報」を見られるパッチノート画面を追加。バージョンごとの変更点を日付付きで一覧表示",
+    ],
+  },
   {
     version: "3.0.0",
     date: "2026-09-13",
