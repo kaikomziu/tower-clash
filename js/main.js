@@ -1,4 +1,4 @@
-// ===== TOWER CLASH: UI/描画/入力/通信の結合 =====
+// ===== TOWER CLASH: UI/描画/入力/通信の結合(オンライン対戦) =====
 "use strict";
 
 const $ = (id) => document.getElementById(id);
@@ -7,19 +7,16 @@ function showScreen(id) {
 }
 
 const G = {
-  mode: null, // 'cpu' | 'online'
   myRole: null, // 'defender' | 'attacker'
   isHost: false,
   online: null,
   sim: null,
-  cpu: null,
-  cpuLevel: 1,
+  localCharDefs: {}, // 自分が防衛側のときの編成キャラdefs(ランク反映済み)
   selectedShopType: null,
   hoverXY: null,
-  matchStarted: false,
   peerDisconnected: false,
   resultShown: false,
-  // guestが受け取る最新スナップショット(補間用に2枚保持)
+  // ゲストが受け取る最新スナップショット(補間用に2枚保持)
   snapPrev: null, snapCur: null, snapPrevT: 0, snapCurT: 0,
   lastBroadcast: 0,
   rafId: null,
@@ -32,9 +29,9 @@ $("ver-tag").textContent = "v" + TOWERCLASH_VERSION;
 // ===== 倍速コントロール(ホスト権威: オンライン対戦ではホストのみ変更可) =====
 document.querySelectorAll("#speed-ctrl .speed-btn").forEach((btn) => {
   btn.onclick = () => {
-    if (G.mode === "online" && !G.isHost) return;
+    if (!G.isHost) return;
     G.speedMul = Number(btn.dataset.speed);
-    if (G.mode === "online" && G.isHost) G.online.send("speed", { mul: G.speedMul });
+    G.online.send("speed", { mul: G.speedMul });
     updateSpeedButtons();
   };
 });
@@ -42,49 +39,14 @@ function updateSpeedButtons() {
   document.querySelectorAll("#speed-ctrl .speed-btn").forEach((b) => {
     b.classList.toggle("sel", Number(b.dataset.speed) === G.speedMul);
   });
-  $("speed-ctrl").classList.toggle("readonly", G.mode === "online" && !G.isHost);
+  $("speed-ctrl").classList.toggle("readonly", !G.isHost);
 }
 
 // ===== タイトル =====
 $("btn-help").onclick = () => showScreen("s-help");
 $("btn-help-back").onclick = () => showScreen("s-title");
 
-// ===== CPU対戦セットアップ =====
-let cpuSetupRole = null;
-document.querySelectorAll("#s-cpu-setup .role-card").forEach((card) => {
-  card.onclick = () => {
-    cpuSetupRole = card.dataset.role;
-    document.querySelectorAll("#s-cpu-setup .role-card").forEach((c) => c.classList.toggle("sel", c === card));
-    $("btn-cpu-start").disabled = false;
-  };
-});
-(function buildLevelPicker() {
-  const wrap = $("level-pick");
-  CPU_LEVELS.forEach((name, i) => {
-    const b = document.createElement("button");
-    b.className = "level-btn" + (i === G.cpuLevel ? " sel" : "");
-    b.textContent = name;
-    b.onclick = () => {
-      G.cpuLevel = i;
-      wrap.querySelectorAll(".level-btn").forEach((x) => x.classList.remove("sel"));
-      b.classList.add("sel");
-    };
-    wrap.appendChild(b);
-  });
-})();
-$("btn-cpu").onclick = () => {
-  cpuSetupRole = null;
-  document.querySelectorAll("#s-cpu-setup .role-card").forEach((c) => c.classList.remove("sel"));
-  $("btn-cpu-start").disabled = true;
-  showScreen("s-cpu-setup");
-};
-$("btn-cpu-back").onclick = () => showScreen("s-title");
-$("btn-cpu-start").onclick = () => {
-  if (!cpuSetupRole) return;
-  startMatch({ mode: "cpu", myRole: cpuSetupRole });
-};
-
-// ===== オンライン対戦セットアップ =====
+// ===== オンライン対戦セットアップ(ホーム画面のサブ要素) =====
 $("tab-create").onclick = () => switchOnlineTab("create");
 $("tab-join").onclick = () => switchOnlineTab("join");
 function switchOnlineTab(which) {
@@ -99,12 +61,30 @@ document.querySelectorAll("#pane-create .role-card").forEach((card) => {
     onlineSetupRole = card.dataset.role;
     document.querySelectorAll("#pane-create .role-card").forEach((c) => c.classList.toggle("sel", c === card));
     $("btn-create-room").disabled = false;
+    updateLoadoutNote();
   };
 });
+function updateLoadoutNote() {
+  const note = $("loadout-note");
+  if (onlineSetupRole === "defender") {
+    note.hidden = false;
+    $("loadout-note-count").textContent = Meta.getLoadout().length;
+  } else {
+    note.hidden = true;
+  }
+}
+$("btn-edit-loadout-from-online").onclick = () => {
+  ROSTER_RETURN_SCREEN = "s-online";
+  renderRoster();
+  showScreen("s-camp-roster");
+};
+
 $("btn-online").onclick = () => {
   onlineSetupRole = null;
   document.querySelectorAll("#pane-create .role-card").forEach((c) => c.classList.remove("sel"));
   $("btn-create-room").disabled = true;
+  $("btn-join-room").disabled = false;
+  $("loadout-note").hidden = true;
   $("room-wait").hidden = true;
   $("join-code-input").value = "";
   $("join-status").textContent = "";
@@ -113,23 +93,32 @@ $("btn-online").onclick = () => {
 };
 $("btn-online-back").onclick = () => {
   if (G.online) { G.online.leave(); G.online = null; }
-  showScreen("s-title");
+  showScreen("s-camp-home");
+  updateCoinDisplays();
 };
 
+// ホストは「自分が防衛側→自分の編成」「相手が防衛側→相手から届く編成」が揃うまで待って対戦開始する
+let hostRoleChosen = null, hostGuestLoadout = null, hostPeerReady = false, hostMatchBegun = false;
 $("btn-create-room").onclick = async () => {
   if (!onlineSetupRole) return;
   $("btn-create-room").disabled = true;
+  hostRoleChosen = onlineSetupRole; hostGuestLoadout = null; hostPeerReady = false; hostMatchBegun = false;
   const session = new OnlineSession();
   G.online = session;
   try {
     const code = await session.createRoom();
     $("room-code-display").textContent = code;
     $("room-wait").hidden = false;
+    $("waiting-msg").textContent = "相手の参加を待っています…";
     session.on("peerJoined", () => {
-      if (G.matchStarted) return;
-      G.matchStarted = true;
+      if (hostPeerReady) return;
+      hostPeerReady = true;
       session.send("start", { hostRole: onlineSetupRole });
-      startMatch({ mode: "online", myRole: onlineSetupRole, isHost: true, session });
+      tryBeginHostMatch(session);
+    });
+    session.on("loadout", (data) => {
+      hostGuestLoadout = data.list;
+      tryBeginHostMatch(session);
     });
     session.startPing();
   } catch (e) {
@@ -137,6 +126,18 @@ $("btn-create-room").onclick = async () => {
     $("btn-create-room").disabled = false;
   }
 };
+function tryBeginHostMatch(session) {
+  if (hostMatchBegun || !hostPeerReady) return;
+  let charDefs;
+  if (hostRoleChosen === "defender") {
+    charDefs = defsFromLoadoutPayload(Meta.buildLoadoutPayload());
+  } else {
+    if (!hostGuestLoadout) { $("waiting-msg").textContent = "対戦相手の編成を確認しています…"; return; }
+    charDefs = defsFromLoadoutPayload(hostGuestLoadout);
+  }
+  hostMatchBegun = true;
+  startMatch({ myRole: hostRoleChosen, isHost: true, session, charDefs });
+}
 
 $("join-code-input").addEventListener("input", (e) => {
   e.target.value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 5);
@@ -148,15 +149,17 @@ $("btn-join-room").onclick = async () => {
   $("btn-join-room").disabled = true;
   const session = new OnlineSession();
   G.online = session;
+  let guestMatchBegun = false;
   session.on("start", (data) => {
-    if (G.matchStarted) return;
-    G.matchStarted = true;
+    if (guestMatchBegun) return;
+    guestMatchBegun = true;
     const myRole = data.hostRole === "defender" ? "attacker" : "defender";
-    startMatch({ mode: "online", myRole, isHost: false, session });
+    startMatch({ myRole, isHost: false, session });
   });
   try {
     await session.joinRoom(code);
     $("join-status").textContent = "ホストの開始を待っています…";
+    session.send("loadout", { list: Meta.buildLoadoutPayload() });
     session.startPing();
   } catch (e) {
     $("join-status").textContent = "接続できませんでした。コードを確認してください。";
@@ -166,48 +169,32 @@ $("btn-join-room").onclick = async () => {
 
 // ===== 対戦開始 =====
 function startMatch(opts) {
-  G.mode = opts.mode;
   G.myRole = opts.myRole;
   G.isHost = !!opts.isHost;
   G.selectedShopType = null;
-  G.matchStarted = true;
   G.peerDisconnected = false;
   G.resultShown = false;
   G.snapPrev = null; G.snapCur = null;
   G.speedMul = 1;
   updateSpeedButtons();
-  $("hud-net-status").hidden = true;
 
-  const iAmAuthority = G.mode === "cpu" || (G.mode === "online" && G.isHost);
-  if (iAmAuthority) {
-    G.sim = new TowerClashSim();
-    if (G.mode === "cpu") {
-      const otherRole = G.myRole === "defender" ? "attacker" : "defender";
-      G.cpu = new CpuController(G.sim, otherRole, G.cpuLevel);
-    } else {
-      G.cpu = null;
-    }
-  } else {
-    G.sim = null;
-  }
+  G.sim = G.isHost ? new TowerClashSim(opts.charDefs) : null;
 
-  if (G.mode === "online") {
-    const session = opts.session;
-    session.on("action", (data) => { if (G.sim) applyAction(G.sim, data); });
-    session.on("state", (data) => {
-      G.snapPrev = G.snapCur; G.snapPrevT = G.snapCurT;
-      G.snapCur = data; G.snapCurT = performance.now();
-    });
-    session.on("peerLeft", () => {
-      G.peerDisconnected = true;
-      $("hud-net-status").hidden = false;
-      $("hud-net-status").textContent = "⚠️ 相手が切断しました";
-      showDisconnectResult();
-    });
-    session.on("speed", (data) => { G.speedMul = data.mul; updateSpeedButtons(); });
+  const session = opts.session;
+  session.on("action", (data) => { if (G.sim) applyAction(G.sim, data); });
+  session.on("state", (data) => {
+    G.snapPrev = G.snapCur; G.snapPrevT = G.snapCurT;
+    G.snapCur = data; G.snapCurT = performance.now();
+  });
+  session.on("peerLeft", () => {
+    G.peerDisconnected = true;
     $("hud-net-status").hidden = false;
-    $("hud-net-status").textContent = "🌐 接続中";
-  }
+    $("hud-net-status").textContent = "⚠️ 相手が切断しました";
+    showDisconnectResult();
+  });
+  session.on("speed", (data) => { G.speedMul = data.mul; updateSpeedButtons(); });
+  $("hud-net-status").hidden = false;
+  $("hud-net-status").textContent = "🌐 接続中";
 
   $("hud-role-tag").textContent = G.myRole === "defender" ? "🛡️防衛側" : "⚔️侵略側";
   buildShopRow();
@@ -226,15 +213,15 @@ function applyAction(sim, data) {
 }
 
 function doPlaceTower(col, row, type) {
-  if (G.mode === "online" && !G.isHost) G.online.send("action", { kind: "place", col, row, type });
+  if (!G.isHost) G.online.send("action", { kind: "place", col, row, type });
   else if (G.sim) G.sim.applyPlaceTower(col, row, type);
 }
 function doSellTower(id) {
-  if (G.mode === "online" && !G.isHost) G.online.send("action", { kind: "sell", id });
+  if (!G.isHost) G.online.send("action", { kind: "sell", id });
   else if (G.sim) G.sim.applySellTower(id);
 }
 function doSpawnEnemy(type) {
-  if (G.mode === "online" && !G.isHost) G.online.send("action", { kind: "spawn", type });
+  if (!G.isHost) G.online.send("action", { kind: "spawn", type });
   else if (G.sim) G.sim.applySpawnEnemy(type);
 }
 
@@ -242,17 +229,32 @@ function doSpawnEnemy(type) {
 function buildShopRow() {
   const row = $("shop-row");
   row.innerHTML = "";
-  const defs = G.myRole === "defender" ? TOWER_DEFS : ENEMY_DEFS;
-  $("hud-resource-label").textContent = G.myRole === "defender" ? "💰ゴールド" : "🔷マナ";
-  Object.keys(defs).forEach((key) => {
-    const def = defs[key];
-    const b = document.createElement("button");
-    b.className = "shop-btn";
-    b.dataset.type = key;
-    b.innerHTML = `<span class="sb-icon">${def.emoji}</span><span>${def.name}</span><span class="sb-cost">${def.cost}</span>`;
-    b.onclick = () => onShopClick(key, b);
-    row.appendChild(b);
-  });
+  if (G.myRole === "defender") {
+    $("hud-resource-label").textContent = "💰ゴールド";
+    const loadout = Meta.getLoadout();
+    G.localCharDefs = {};
+    loadout.forEach((id) => { G.localCharDefs[id] = effectiveCharDef(id, Meta.rankOf(id)); });
+    loadout.forEach((id) => {
+      const def = G.localCharDefs[id];
+      const b = document.createElement("button");
+      b.className = "shop-btn";
+      b.dataset.type = id;
+      b.innerHTML = `<span class="sb-icon">${def.emoji}</span><span>${def.name}</span><span class="sb-cost">${def.cost}</span>`;
+      b.onclick = () => onShopClick(id, b);
+      row.appendChild(b);
+    });
+  } else {
+    $("hud-resource-label").textContent = "🔷マナ";
+    Object.keys(ENEMY_DEFS).forEach((key) => {
+      const def = ENEMY_DEFS[key];
+      const b = document.createElement("button");
+      b.className = "shop-btn";
+      b.dataset.type = key;
+      b.innerHTML = `<span class="sb-icon">${def.emoji}</span><span>${def.name}</span><span class="sb-cost">${def.cost}</span>`;
+      b.onclick = () => onShopClick(key, b);
+      row.appendChild(b);
+    });
+  }
 }
 function onShopClick(type, btn) {
   if (G.myRole === "defender") {
@@ -265,7 +267,8 @@ function onShopClick(type, btn) {
     document.querySelectorAll(".shop-btn").forEach((x) => x.classList.toggle("sel", x === btn));
     $("sell-panel").hidden = true;
     $("place-hint").hidden = false;
-    $("place-hint").textContent = TOWER_DEFS[type].emoji + " " + TOWER_DEFS[type].name + "を置く場所をタップ";
+    const def = G.localCharDefs[type];
+    $("place-hint").textContent = def.emoji + " " + def.name + "を置く場所をタップ";
   } else {
     doSpawnEnemy(type);
     btn.classList.add("sel");
@@ -301,7 +304,7 @@ canvas.addEventListener("click", (e) => {
     return Math.hypot(cx - x, cy - y) <= 20;
   });
   if (hit) {
-    const def = TOWER_DEFS[hit.type];
+    const def = G.localCharDefs[hit.type];
     $("sell-info").textContent = `${def.emoji}${def.name} (売却:+${Math.round(def.cost * 0.6)})`;
     $("sell-panel").hidden = false;
     $("btn-sell").onclick = () => { doSellTower(hit.id); $("sell-panel").hidden = true; };
@@ -311,7 +314,7 @@ canvas.addEventListener("click", (e) => {
 });
 $("btn-sell-cancel").onclick = () => { $("sell-panel").hidden = true; };
 
-$("btn-quit").onclick = () => { endToTitle(); };
+$("btn-quit").onclick = () => { endToHome(); };
 
 function getCurrentData() {
   if (G.sim) return G.sim.serialize();
@@ -332,18 +335,17 @@ function loop(ts) {
     let steps = 0;
     while (simAcc >= FIXED_DT && steps < MAX_CATCHUP_STEPS && !G.sim.over) {
       G.sim.tick(FIXED_DT);
-      if (G.cpu) G.cpu.update(FIXED_DT);
       simAcc -= FIXED_DT;
       steps++;
     }
     if (G.sim.over) simAcc = 0;
-    if (G.mode === "online" && G.isHost) {
+    if (G.isHost) {
       G.lastBroadcast += frameDt;
       if (G.lastBroadcast > 0.06) { G.lastBroadcast = 0; G.online.send("state", G.sim.serialize()); }
     }
     renderAll(G.sim.serialize());
     if (G.sim.over && !G.resultShown) { G.resultShown = true; setTimeout(() => showResult(G.sim.winner, G.sim.reason), 400); }
-  } else if (G.mode === "online" && !G.isHost && G.snapCur) {
+  } else if (!G.isHost && G.snapCur) {
     const data = interpolatedSnapshot();
     renderAll(data);
     if (G.snapCur.over && !G.resultShown) { G.resultShown = true; setTimeout(() => showResult(G.snapCur.winner, G.snapCur.reason), 400); }
@@ -384,14 +386,16 @@ function renderAll(data) {
   ctx.fillText("⚔️", PATH_POINTS[0].x, PATH_POINTS[0].y);
   ctx.fillText("🏯", PATH_POINTS[PATH_POINTS.length - 1].x, PATH_POINTS[PATH_POINTS.length - 1].y);
 
+  const charDefs = data.charDefs || {};
+
   // 設置可能セルのハイライト(防衛側が配置中)
   if (G.myRole === "defender" && G.selectedShopType) {
     ctx.fillStyle = "rgba(58,107,255,0.12)";
     BUILDABLE_CELLS.forEach(([c, r]) => {
       if (!(data.towers || []).some((t) => t.col === c && t.row === r)) ctx.fillRect(c * CELL + 2, r * CELL + 2, CELL - 4, CELL - 4);
     });
-    if (G.hoverXY) {
-      const def = TOWER_DEFS[G.selectedShopType];
+    if (G.hoverXY && G.localCharDefs[G.selectedShopType]) {
+      const def = G.localCharDefs[G.selectedShopType];
       ctx.beginPath(); ctx.arc(G.hoverXY.x, G.hoverXY.y, def.range, 0, Math.PI * 2);
       ctx.strokeStyle = "rgba(255,255,255,0.35)"; ctx.stroke();
     }
@@ -399,7 +403,8 @@ function renderAll(data) {
 
   // タワー
   (data.towers || []).forEach((t) => {
-    const def = TOWER_DEFS[t.type];
+    const def = charDefs[t.type];
+    if (!def) return;
     const cx = t.col * CELL + CELL / 2, cy = t.row * CELL + CELL / 2;
     ctx.beginPath(); ctx.arc(cx, cy, 16, 0, Math.PI * 2);
     ctx.fillStyle = def.color; ctx.fill();
@@ -419,7 +424,7 @@ function renderAll(data) {
     const def = ENEMY_DEFS[e.type];
     const p = pointOnPath(e.dist);
     ctx.beginPath(); ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
-    ctx.fillStyle = e.slowT > 0 ? "#7dd3fc" : def.color; ctx.fill();
+    ctx.fillStyle = e.slow ? "#7dd3fc" : (e.burn ? "#fb923c" : def.color); ctx.fill();
     ctx.font = "16px sans-serif"; ctx.fillText(def.emoji, p.x, p.y - 1);
     // HPバー
     const w = 26, hpr = Math.max(0, e.hp / e.hpMax);
@@ -443,8 +448,8 @@ function updateHud(data) {
   $("hud-resource-val").textContent = G.myRole === "defender" ? Math.floor(data.gold) : Math.floor(data.mana) + "/" + data.manaMax;
   document.querySelectorAll(".shop-btn").forEach((b) => {
     const type = b.dataset.type;
-    const def = G.myRole === "defender" ? TOWER_DEFS[type] : ENEMY_DEFS[type];
-    b.disabled = myGold < def.cost;
+    const def = G.myRole === "defender" ? G.localCharDefs[type] : ENEMY_DEFS[type];
+    b.disabled = !def || myGold < def.cost;
   });
 }
 
@@ -466,15 +471,11 @@ function showDisconnectResult() {
   showScreen("s-result");
 }
 
-$("btn-to-title").onclick = () => endToTitle();
-$("btn-rematch").onclick = () => {
-  if (G.mode === "cpu") { startMatch({ mode: "cpu", myRole: G.myRole }); }
-  else { endToTitle(); } // オンラインは部屋を作り直す運用
-};
+$("btn-to-title").onclick = () => endToHome();
 
-function endToTitle() {
+function endToHome() {
   if (G.online) { G.online.leave(); G.online = null; }
-  G.sim = null; G.cpu = null; G.mode = null;
-  G.matchStarted = false;
-  showScreen("s-title");
+  G.sim = null;
+  showScreen("s-camp-home");
+  updateCoinDisplays();
 }

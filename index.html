@@ -23,9 +23,7 @@
     <h1 class="logo">TOWER<span>×</span>CLASH</h1>
     <p class="tag">ガチャで集めるキャラで守る、本格タワーディフェンス</p>
     <div class="menu-col">
-      <button class="btn hero" id="btn-campaign">🏆 キャンペーン</button>
-      <button class="btn ghost" id="btn-cpu">⚡ フリー対戦(CPU)</button>
-      <button class="btn ghost" id="btn-online">🌐 オンライン対戦(2端末)</button>
+      <button class="btn hero" id="btn-campaign">▶ スタート</button>
       <button class="btn ghost" id="btn-help">❓ あそびかた</button>
     </div>
     <p class="ver" id="ver-tag"></p>
@@ -35,31 +33,32 @@
   <section class="screen" id="s-help">
     <h2>あそびかた</h2>
     <div class="help-box">
-      <h3>🏆 キャンペーン(メインモード)</h3>
-      <p>全5ステージ×難易度3段階(かんたん/ふつう/むずかしい)に挑む一人用モード。ウェーブごとに現れる敵を、編成したキャラクターで迎撃します。戦って貯まったコイン・勝利ボーナスでガチャを引き、新しいキャラを仲間にしましょう。</p>
+      <h3>⚔️ ステージ攻略</h3>
+      <p>全5ステージ×難易度3段階(かんたん/ふつう/むずかしい)。ウェーブごとに現れる敵を、編成したキャラクターで迎撃します。戦って貯まったコイン・勝利ボーナスでガチャを引き、新しいキャラを仲間にしましょう。</p>
       <ul>
         <li>戦闘中はゴールドが自動で貯まり、編成したキャラを通り道のそばに設置できます</li>
         <li>設置したキャラはその場でレベルアップ(最大Lv3)でき、タップすれば売却も可能</li>
         <li>ガチャで手に入れた重複キャラはランクアップに変換され、性能が永続的に強化されます</li>
         <li>ステージをクリアすると次のステージが解放されます</li>
       </ul>
-      <h3>⚡ フリー対戦 / 🌐 オンライン対戦</h3>
-      <p>防衛側(タワーで守る)と侵略側(敵を送り込む)に分かれて戦う非対称対戦モード。フリー対戦はCPU相手に、オンライン対戦は5桁ルームコードでPC・スマホ同士で1対1対戦できます。</p>
+      <h3>🌐 オンライン対戦(サブ要素)</h3>
+      <p>防衛側(タワーで守る)と侵略側(敵を送り込む)に分かれて戦う非対称対戦。5桁ルームコードでPC・スマホ同士で1対1対戦できます。防衛側は自分が編成したキャラ(ランクも反映)をそのまま持ち込んで戦えます。</p>
     </div>
     <button class="btn ghost" id="btn-help-back">← もどる</button>
   </section>
 
-  <!-- ===== キャンペーン: ホーム ===== -->
+  <!-- ===== ホーム ===== -->
   <section class="screen" id="s-camp-home">
     <div class="camp-topbar">
       <button class="btn ghost small" id="btn-camp-home-back">← タイトルへ</button>
       <div class="coin-badge">🪙 <span id="camp-coin-val">0</span></div>
     </div>
-    <h1 class="logo small">🏆 キャンペーン</h1>
+    <h1 class="logo small">TOWER<span>×</span>CLASH</h1>
     <div class="menu-col">
       <button class="btn hero" id="btn-camp-stages">⚔️ ステージへ出撃</button>
       <button class="btn big" id="btn-camp-gacha">🎰 ガチャを引く</button>
       <button class="btn big" id="btn-camp-roster">📖 キャラ編成</button>
+      <button class="btn ghost" id="btn-online">🌐 オンライン対戦(サブ)</button>
     </div>
   </section>
 
@@ -152,24 +151,6 @@
     </div>
   </section>
 
-  <!-- ===== 役割/難易度選択 (CPU対戦) ===== -->
-  <section class="screen" id="s-cpu-setup">
-    <h2>CPU対戦の設定</h2>
-    <p class="sub">あなたの役割を選んでください</p>
-    <div class="role-pick">
-      <button class="role-card" data-role="defender">
-        <div class="ricon">🛡️</div><div class="rname">防衛側</div><div class="rdesc">タワーで守る</div>
-      </button>
-      <button class="role-card" data-role="attacker">
-        <div class="ricon">⚔️</div><div class="rname">侵略側</div><div class="rdesc">敵を送り込む</div>
-      </button>
-    </div>
-    <p class="sub">CPUの強さ</p>
-    <div class="level-pick" id="level-pick"></div>
-    <button class="btn big" id="btn-cpu-start" disabled>対戦開始</button>
-    <button class="btn ghost" id="btn-cpu-back">← もどる</button>
-  </section>
-
   <!-- ===== オンライン: 役割選択→ルーム作成/参加 ===== -->
   <section class="screen" id="s-online">
     <h2>オンライン対戦</h2>
@@ -188,6 +169,10 @@
           <div class="ricon">⚔️</div><div class="rname">侵略側</div><div class="rdesc">敵を送り込む</div>
         </button>
       </div>
+      <p class="loadout-note" id="loadout-note" hidden>
+        防衛側は現在の編成(<span id="loadout-note-count"></span>体)を持ち込みます。
+        <button class="btn ghost small" id="btn-edit-loadout-from-online">編成を編集</button>
+      </p>
       <button class="btn big" id="btn-create-room" disabled>部屋を作成</button>
       <div class="room-wait" id="room-wait" hidden>
         <p class="sub">合言葉コードをもう一方の端末に伝えてください</p>
@@ -247,8 +232,7 @@
     <h2 id="result-title">勝利!</h2>
     <p id="result-reason" class="sub"></p>
     <div class="menu-col">
-      <button class="btn big" id="btn-rematch">もう一度</button>
-      <button class="btn ghost" id="btn-to-title">タイトルへ</button>
+      <button class="btn big" id="btn-to-title">ホームへ戻る</button>
     </div>
   </section>
 
@@ -256,12 +240,11 @@
 
 <script src="js/version.js"></script>
 <script src="js/sim.js"></script>
-<script src="js/cpu.js"></script>
 <script src="js/online.js"></script>
-<script src="js/main.js"></script>
 <script src="js/campaign-data.js"></script>
 <script src="js/meta.js"></script>
 <script src="js/campaign-sim.js"></script>
+<script src="js/main.js"></script>
 <script src="js/campaign-ui.js"></script>
 </body>
 </html>

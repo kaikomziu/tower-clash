@@ -69,7 +69,12 @@ $("btn-stage-launch").onclick = () => {
 };
 
 // ===== キャラ編成 =====
-$("btn-roster-back").onclick = () => showScreen("s-camp-home");
+let ROSTER_RETURN_SCREEN = "s-camp-home";
+$("btn-roster-back").onclick = () => {
+  showScreen(ROSTER_RETURN_SCREEN);
+  ROSTER_RETURN_SCREEN = "s-camp-home";
+  if (typeof updateLoadoutNote === "function") updateLoadoutNote();
+};
 function renderRoster() {
   updateCoinDisplays();
   const grid = $("char-grid");

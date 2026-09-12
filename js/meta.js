@@ -68,6 +68,11 @@ const Meta = {
   },
   setLoadout(ids) { this.data.loadout = ids.slice(0, MAX_LOADOUT); this.save(); },
 
+  // オンライン対戦へ送る自分の編成データ(通信用の軽量な形)
+  buildLoadoutPayload() {
+    return this.getLoadout().map((id) => ({ id, rank: this.rankOf(id) }));
+  },
+
   // ガチャ1回分。結果 { id, isNew, rank, pityUsed, refund }
   pull() {
     const forcePity = this.data.pity >= GACHA_PITY_COUNT - 1;
@@ -100,3 +105,10 @@ const Meta = {
     return results;
   },
 };
+
+// 通信で受け取った相手の編成データ([{id,rank}]) から、TowerClashSimに渡せるcharDefsマップを作る
+function defsFromLoadoutPayload(list) {
+  const out = {};
+  (list || []).forEach(({ id, rank }) => { out[id] = effectiveCharDef(id, rank); });
+  return out;
+}
