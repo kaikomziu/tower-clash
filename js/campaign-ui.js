@@ -75,6 +75,30 @@ $("btn-roster-back").onclick = () => {
   ROSTER_RETURN_SCREEN = "s-camp-home";
   if (typeof updateLoadoutNote === "function") updateLoadoutNote();
 };
+// 現在の実効ステータス(ランク・レベル反映済み)からキャラ詳細の表示用ラベルを組み立てる
+function round1(x) { return Math.round(x * 10) / 10; }
+function formatCharStats(effDef) {
+  const lines = [`💰コスト ${effDef.cost}`, `🎯射程 ${Math.round(effDef.range)}`];
+  if (effDef.kind !== "buff") {
+    lines.push(`⚔️攻撃力 ${round1(effDef.dmg)}`, `⏱${effDef.cooldown}秒間隔`, `📈DPS ${round1(effDef.dmg / effDef.cooldown)}`);
+  }
+  if (effDef.kind === "splash") {
+    lines.push(`💥範囲半径 ${Math.round(effDef.splash)}`);
+    if (effDef.dotDmg) lines.push(`🔥継続 ${round1(effDef.dotDmg)}/秒`);
+  } else if (effDef.kind === "chain") {
+    lines.push(`🔗連鎖 ${effDef.chainCount}体`, `減衰 ${Math.round((1 - effDef.chainFalloff) * 100)}%/体`);
+  } else if (effDef.kind === "slow") {
+    lines.push(`❄️減速 ${Math.round(effDef.slow * 100)}%`, `持続 ${effDef.slowDur}秒`);
+  } else if (effDef.kind === "dot") {
+    lines.push(`🔥継続 ${round1(effDef.dotDmg)}/秒`, `持続 ${effDef.dotDur}秒`);
+  } else if (effDef.kind === "pull") {
+    lines.push(`⬅️後退 ${effDef.pullDist}px`);
+  } else if (effDef.kind === "buff") {
+    lines.push(`🛡️攻撃力+${Math.round(effDef.buffDmg * 100)}%`, `攻撃速度+${Math.round(effDef.buffRate * 100)}%`);
+  }
+  return lines;
+}
+
 function renderRoster() {
   updateCoinDisplays();
   const grid = $("char-grid");
@@ -85,6 +109,7 @@ function renderRoster() {
     const owned = Meta.isOwned(id);
     const rank = Meta.rankOf(id);
     const level = Meta.levelOf(id);
+    const effDef = owned ? effectiveCharDef(id, rank, level) : null;
     const inLoadout = loadout.includes(id);
     // レベルアップボタンを内包するためbutton要素ではなくdivを使う(button内button回避)
     const card = document.createElement("div");
@@ -96,6 +121,7 @@ function renderRoster() {
       <div class="char-rarity">${RARITY_LABEL[def.rarity]}${owned ? ` Rk${rank} Lv${level}` : ""}</div>
       ${owned ? `<div class="char-desc">${def.desc}</div>` : ""}
       ${owned && def.specialDesc ? `<div class="char-special">${def.specialDesc}</div>` : ""}
+      ${owned ? `<div class="char-stats">${formatCharStats(effDef).map((l) => `<span>${l}</span>`).join("")}</div>` : ""}
     `;
     if (owned) {
       card.onclick = () => {
