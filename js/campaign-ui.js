@@ -101,7 +101,10 @@ $("btn-camp-gacha").onclick = () => { renderGachaScreen(); showScreen("s-camp-ga
 $("roster-max").textContent = MAX_LOADOUT;
 
 // ===== ステージ選択 =====
-$("btn-stages-back").onclick = () => showScreen("s-camp-home");
+$("btn-stages-back").onclick = () => {
+  if (COOP.active && !CG.sim) coopLeave(); // 出撃前に離脱する場合は協力プレイの部屋も抜ける
+  showScreen("s-camp-home");
+};
 let CG_selectedStage = null, CG_selectedDiff = "normal";
 
 function renderStageGrid() {
@@ -130,6 +133,10 @@ function openStageDetail(st) {
   $("sd-title").textContent = st.emoji + " " + st.name;
   $("sd-desc").textContent = st.desc;
   renderDiffPick();
+  // 協力プレイ中はエンドレス/討伐戦は非対応、出撃ボタンの表記も変える
+  $("btn-stage-launch-endless").hidden = COOP.active;
+  $("btn-stage-launch-bossrush").hidden = COOP.active;
+  $("btn-stage-launch").textContent = COOP.active ? "🤝 一緒に出撃" : "出撃";
   $("stage-detail").hidden = false;
 }
 function renderDiffPick() {
@@ -148,6 +155,7 @@ function renderDiffPick() {
 $("btn-stage-detail-close").onclick = () => { $("stage-detail").hidden = true; };
 $("btn-stage-launch").onclick = () => {
   if (Meta.getLoadout().length === 0) { alert("キャラ編成で出撃するキャラを選んでください"); return; }
+  if (COOP.active) { startCoopBattleHost(CG_selectedStage, CG_selectedDiff); return; }
   startCampaignBattle(CG_selectedStage, CG_selectedDiff);
 };
 $("btn-stage-launch-endless").onclick = () => {
@@ -441,7 +449,11 @@ cCanvas.addEventListener("click", (e) => {
   if (CG.placingChar) {
     const col = Math.floor(x / CCELL), row = Math.floor(y / CCELL);
     if (col >= 0 && row >= 0 && col < CCOLS && row < CROWS) {
-      if (CG.sim.applyPlaceTower(col, row, CG.placingChar)) { Meta.trackMission("placeTower", 1); Meta.trackStat("towersPlaced", 1); SFX.place(); }
+      if (COOP.active && COOP.role === "guest") {
+        COOP.session.send("coopPlace", { charId: CG.placingChar, col, row });
+      } else if (CG.sim.applyPlaceTower(col, row, CG.placingChar)) {
+        Meta.trackMission("placeTower", 1); Meta.trackStat("towersPlaced", 1); SFX.place();
+      }
     }
     CG.placingChar = null;
     document.querySelectorAll("#camp-shop-row .shop-btn").forEach((b) => b.classList.remove("sel"));
@@ -461,8 +473,13 @@ function openCampSellPanel(t) {
   const levelCost = canLevel ? battleLevelUpCost(def.cost, t.level) : null;
   $("camp-sell-info").textContent = `${def.emoji}${def.name} Lv${t.level}` + (canLevel ? ` (強化:${levelCost}🪙)` : "(MAX)");
   $("btn-camp-levelup").disabled = !canLevel;
-  $("btn-camp-levelup").onclick = () => { if (CG.sim.applyLevelUp(t.id)) SFX.levelup(); openCampSellPanel(t); };
-  $("btn-camp-sell").onclick = () => { CG.sim.applySellTower(t.id); SFX.sell(); $("camp-sell-panel").hidden = true; };
+  if (COOP.active && COOP.role === "guest") {
+    $("btn-camp-levelup").onclick = () => { COOP.session.send("coopLevelUp", { towerId: t.id }); $("camp-sell-panel").hidden = true; };
+    $("btn-camp-sell").onclick = () => { COOP.session.send("coopSell", { towerId: t.id }); $("camp-sell-panel").hidden = true; };
+  } else {
+    $("btn-camp-levelup").onclick = () => { if (CG.sim.applyLevelUp(t.id)) SFX.levelup(); openCampSellPanel(t); };
+    $("btn-camp-sell").onclick = () => { CG.sim.applySellTower(t.id); SFX.sell(); $("camp-sell-panel").hidden = true; };
+  }
   $("camp-sell-panel").hidden = false;
 }
 $("btn-camp-sell-cancel").onclick = () => { $("camp-sell-panel").hidden = true; };
@@ -502,6 +519,16 @@ updateCampSpeedButtons();
 // ===== 一時停止(再開/最初から再挑戦/ホームに戻る) =====
 $("btn-camp-pause").onclick = () => {
   if (!CG.sim || CG.sim.over) return;
+  if (COOP.active) {
+    if (confirm("協力プレイから退出しますか?")) {
+      coopLeave();
+      CG.sim = null;
+      showScreen("s-camp-home");
+      updateCoinDisplays();
+      updateDailyBadges();
+    }
+    return;
+  }
   CG.paused = true;
   $("pause-overlay").hidden = false;
 };
@@ -579,9 +606,11 @@ function campLoop(ts) {
     });
 
     campRenderAll(CG.sim);
+    if (COOP.active && COOP.role === "host") broadcastCoopState(frameEvents);
     if (CG.sim.over && !CG.resultShown) {
       CG.resultShown = true;
-      setTimeout(() => showCampResult(CG.sim), 500);
+      if (COOP.active) setTimeout(() => showCoopResult(CG.sim), 500);
+      else setTimeout(() => showCampResult(CG.sim), 500);
     }
   }
   CG.rafId = requestAnimationFrame(campLoop);

@@ -25,6 +25,7 @@ function metaDefault() {
       enemiesKilled: 0, wavesCleared: 0, coinsEarnedTotal: 0, levelUpsBought: 0,
       loginDays: 0, onlineWins: 0, dailyBonusClaims: 0, dailyMissionsClaimed: 0,
       totalPowerPeak: 0, endlessRuns: 0, endlessBestWave: 0, bossRushClears: 0,
+      coopMatches: 0, coopWins: 0,
     },
   };
 }

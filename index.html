@@ -96,8 +96,35 @@
     </div>
     <div class="menu-col">
       <button class="btn ghost" id="btn-online">🌐 オンライン対戦(サブ)</button>
+      <button class="btn ghost" id="btn-coop">🤝 協力プレイ(β)</button>
       <button class="btn ghost" id="btn-ranking">🌍 世界ランキング</button>
     </div>
+  </section>
+
+  <!-- ===== 協力プレイ: ロビー ===== -->
+  <section class="screen" id="s-coop-lobby">
+    <h2>🤝 協力プレイ</h2>
+    <p class="sub">2人で同じステージに挑み、力を合わせて全ウェーブ撃退を目指そう(β版: 通常ステージのみ対応)</p>
+    <div class="online-tabs">
+      <button class="tab-btn on" id="coop-tab-create">部屋を作る</button>
+      <button class="tab-btn" id="coop-tab-join">部屋に入る</button>
+    </div>
+    <div id="coop-pane-create" class="online-pane">
+      <button class="btn big" id="btn-coop-create">部屋を作成</button>
+      <div class="room-wait" id="coop-room-wait" hidden>
+        <p class="sub">合言葉コードをもう一方の端末に伝えてください</p>
+        <div class="room-code" id="coop-room-code-display">-----</div>
+        <p class="waiting-msg" id="coop-lobby-status">相手の参加を待っています…</p>
+        <button class="btn hero" id="btn-coop-goto-stage" hidden>⚔️ ステージを選んで出撃</button>
+      </div>
+    </div>
+    <div id="coop-pane-join" class="online-pane" hidden>
+      <p class="sub">ホストから伝えられた5桁コードを入力</p>
+      <input id="coop-join-code-input" class="code-input" maxlength="5" placeholder="ABCDE" autocomplete="off" spellcheck="false">
+      <button class="btn big" id="btn-coop-join">参加する</button>
+      <p class="join-status" id="coop-join-status"></p>
+    </div>
+    <button class="btn ghost" id="btn-coop-back">← もどる</button>
   </section>
 
   <!-- ===== 世界ランキング ===== -->
@@ -373,16 +400,17 @@
   <div id="achievement-toast-container"></div>
 </div>
 
-<script src="js/version.js?v=12"></script>
-<script src="js/sound.js?v=12"></script>
-<script src="js/sim.js?v=12"></script>
-<script src="js/online.js?v=12"></script>
-<script src="js/ranking.js?v=12"></script>
-<script src="js/campaign-data.js?v=12"></script>
-<script src="js/achievements.js?v=12"></script>
-<script src="js/meta.js?v=12"></script>
-<script src="js/campaign-sim.js?v=12"></script>
-<script src="js/main.js?v=12"></script>
-<script src="js/campaign-ui.js?v=12"></script>
+<script src="js/version.js?v=13"></script>
+<script src="js/sound.js?v=13"></script>
+<script src="js/sim.js?v=13"></script>
+<script src="js/online.js?v=13"></script>
+<script src="js/ranking.js?v=13"></script>
+<script src="js/campaign-data.js?v=13"></script>
+<script src="js/achievements.js?v=13"></script>
+<script src="js/meta.js?v=13"></script>
+<script src="js/campaign-sim.js?v=13"></script>
+<script src="js/main.js?v=13"></script>
+<script src="js/campaign-ui.js?v=13"></script>
+<script src="js/coop.js?v=13"></script>
 </body>
 </html>

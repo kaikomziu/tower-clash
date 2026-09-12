@@ -33,23 +33,23 @@ class OnlineSession {
 
   on(type, cb) { this.handlers[type] = cb; }
 
-  createRoom() {
+  createRoom(prefix) {
     this._ensureClient();
     this.role = "host";
     this.roomCode = genRoomCode();
-    return this._joinChannel(this.roomCode).then(() => this.roomCode);
+    return this._joinChannel(this.roomCode, prefix).then(() => this.roomCode);
   }
 
-  joinRoom(code) {
+  joinRoom(code, prefix) {
     this._ensureClient();
     this.role = "guest";
     this.roomCode = (code || "").toUpperCase().trim();
-    return this._joinChannel(this.roomCode);
+    return this._joinChannel(this.roomCode, prefix);
   }
 
-  _joinChannel(code) {
+  _joinChannel(code, prefix) {
     return new Promise((resolve, reject) => {
-      const ch = this.client.channel("towerclash-room-" + code, {
+      const ch = this.client.channel((prefix || "towerclash-room-") + code, {
         config: { broadcast: { self: false }, presence: { key: this.myId } },
       });
       this.channel = ch;

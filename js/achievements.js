@@ -67,6 +67,9 @@ const ACHIEVEMENTS = [
   { id: "endless_wave_10", name: "エンドレスの挑戦者", desc: "エンドレスモードで10ウェーブ生き延びる", emoji: "♾️", reward: 100, check: (s) => (s.endlessBestWave || 0) >= 10 },
   { id: "endless_wave_30", name: "終わりなき守護者", desc: "エンドレスモードで30ウェーブ生き延びる", emoji: "🌌", reward: 350, check: (s) => (s.endlessBestWave || 0) >= 30 },
   { id: "bossrush_clear_1", name: "討伐戦制覇", desc: "討伐戦(ボスラッシュ)を1回クリアする", emoji: "👹", reward: 200, check: (s) => (s.bossRushClears || 0) >= 1 },
+
+  // ----- 協力プレイ -----
+  { id: "coop_win_1", name: "息の合った連携", desc: "協力プレイで勝利する", emoji: "🤝", reward: 150, check: (s) => (s.coopWins || 0) >= 1 },
 ];
 
 const ACHIEVEMENT_TOTAL_COUNT = ACHIEVEMENTS.length;
