@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>TOWER CLASH - 防衛 vs 侵略の非対称タワーディフェンス対戦</title>
-<meta name="description" content="タワーを置いて守るか、敵を送り込んで攻めるか。PCとスマホでクロスプレイできる非対称タワーディフェンス対戦。5桁ルームコードのオンライン対戦、CPU対戦(4段階)対応。">
+<title>TOWER CLASH - ガチャで集めるキャラで守るタワーディフェンス</title>
+<meta name="description" content="ガチャで仲間を集めて挑む本格タワーディフェンス。難易度3段階×ステージ5種、戦闘で貯めたコインでガチャを引いてキャラを収集・装備、戦闘中はキャラをその場でレベルアップ。5桁ルームコードでPC・スマホのオンライン対戦も対応。">
 <link rel="canonical" href="https://kaikomziu.github.io/tower-clash/">
 <meta property="og:type" content="website">
 <meta property="og:title" content="TOWER CLASH">
-<meta property="og:description" content="防衛側はタワーで守り、侵略側は敵を送り込む。PC・スマホでクロスプレイできる非対称タワーディフェンス対戦。">
+<meta property="og:description" content="ガチャでキャラを集めて挑む、全5ステージ×難易度3段階のタワーディフェンス。戦闘中のレベルアップにも対応。">
 <meta property="og:url" content="https://kaikomziu.github.io/tower-clash/">
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8F%B0%3C/text%3E%3C/svg%3E">
@@ -21,10 +21,11 @@
   <!-- ===== タイトル ===== -->
   <section class="screen on" id="s-title">
     <h1 class="logo">TOWER<span>×</span>CLASH</h1>
-    <p class="tag">守るか、攻めるか。非対称タワーディフェンス対戦</p>
+    <p class="tag">ガチャで集めるキャラで守る、本格タワーディフェンス</p>
     <div class="menu-col">
-      <button class="btn big" id="btn-cpu">⚡ CPU対戦</button>
-      <button class="btn big" id="btn-online">🌐 オンライン対戦(2端末)</button>
+      <button class="btn hero" id="btn-campaign">🏆 キャンペーン</button>
+      <button class="btn ghost" id="btn-cpu">⚡ フリー対戦(CPU)</button>
+      <button class="btn ghost" id="btn-online">🌐 オンライン対戦(2端末)</button>
       <button class="btn ghost" id="btn-help">❓ あそびかた</button>
     </div>
     <p class="ver" id="ver-tag"></p>
@@ -34,24 +35,121 @@
   <section class="screen" id="s-help">
     <h2>あそびかた</h2>
     <div class="help-box">
-      <h3>🛡️ 防衛側</h3>
-      <p>ゴールドは自動で貯まります。タワーを買って通り道のそばに設置し、進んでくる敵を迎撃してください。制限時間(3分)までHPが0にならなければ勝利です。</p>
+      <h3>🏆 キャンペーン(メインモード)</h3>
+      <p>全5ステージ×難易度3段階(かんたん/ふつう/むずかしい)に挑む一人用モード。ウェーブごとに現れる敵を、編成したキャラクターで迎撃します。戦って貯まったコイン・勝利ボーナスでガチャを引き、新しいキャラを仲間にしましょう。</p>
       <ul>
-        <li>🏹 アロー塔: 安くて連射が速い単体攻撃</li>
-        <li>💣 キャノン塔: 範囲攻撃、まとまった敵に強い</li>
-        <li>❄️ フロスト塔: 威力は低いが敵を遅くする</li>
+        <li>戦闘中はゴールドが自動で貯まり、編成したキャラを通り道のそばに設置できます</li>
+        <li>設置したキャラはその場でレベルアップ(最大Lv3)でき、タップすれば売却も可能</li>
+        <li>ガチャで手に入れた重複キャラはランクアップに変換され、性能が永続的に強化されます</li>
+        <li>ステージをクリアすると次のステージが解放されます</li>
       </ul>
-      <p>設置したタワーをタップすると60%還元で売却できます。</p>
-      <h3>⚔️ 侵略側</h3>
-      <p>マナは自動で貯まります。ユニットを送り込んで拠点までたどり着かせましょう。制限時間内にHPを0にすれば勝利です。</p>
-      <ul>
-        <li>👾 グラント: バランス型</li>
-        <li>⚡ ランナー: 速いがHPは低い</li>
-        <li>🛡️ タンク: 遅いが硬く、拠点に与えるダメージも大きい</li>
-      </ul>
-      <p>スマホとPCで役割を分けて対戦するのがおすすめです。</p>
+      <h3>⚡ フリー対戦 / 🌐 オンライン対戦</h3>
+      <p>防衛側(タワーで守る)と侵略側(敵を送り込む)に分かれて戦う非対称対戦モード。フリー対戦はCPU相手に、オンライン対戦は5桁ルームコードでPC・スマホ同士で1対1対戦できます。</p>
     </div>
     <button class="btn ghost" id="btn-help-back">← もどる</button>
+  </section>
+
+  <!-- ===== キャンペーン: ホーム ===== -->
+  <section class="screen" id="s-camp-home">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-camp-home-back">← タイトルへ</button>
+      <div class="coin-badge">🪙 <span id="camp-coin-val">0</span></div>
+    </div>
+    <h1 class="logo small">🏆 キャンペーン</h1>
+    <div class="menu-col">
+      <button class="btn hero" id="btn-camp-stages">⚔️ ステージへ出撃</button>
+      <button class="btn big" id="btn-camp-gacha">🎰 ガチャを引く</button>
+      <button class="btn big" id="btn-camp-roster">📖 キャラ編成</button>
+    </div>
+  </section>
+
+  <!-- ===== キャンペーン: ステージ選択 ===== -->
+  <section class="screen" id="s-camp-stages">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-stages-back">← もどる</button>
+      <div class="coin-badge">🪙 <span id="stages-coin-val">0</span></div>
+    </div>
+    <h2>ステージ選択</h2>
+    <div class="stage-grid" id="stage-grid"></div>
+    <div class="stage-detail" id="stage-detail" hidden>
+      <h3 id="sd-title"></h3>
+      <p class="sub" id="sd-desc"></p>
+      <div class="diff-pick" id="diff-pick"></div>
+      <button class="btn big" id="btn-stage-launch">出撃</button>
+      <button class="btn ghost small" id="btn-stage-detail-close">閉じる</button>
+    </div>
+  </section>
+
+  <!-- ===== キャンペーン: キャラ編成 ===== -->
+  <section class="screen" id="s-camp-roster">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-roster-back">← もどる</button>
+      <div class="coin-badge">🪙 <span id="roster-coin-val">0</span></div>
+    </div>
+    <h2>キャラ編成</h2>
+    <p class="sub">出撃に連れて行くキャラを最大<span id="roster-max"></span>体まで選択(タップで選択/解除)</p>
+    <div class="char-grid" id="char-grid"></div>
+  </section>
+
+  <!-- ===== キャンペーン: ガチャ ===== -->
+  <section class="screen" id="s-camp-gacha">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-gacha-back">← もどる</button>
+      <div class="coin-badge">🪙 <span id="gacha-coin-val">0</span></div>
+    </div>
+    <h2>🎰 ガチャ</h2>
+    <p class="sub">★2以上のキャラが手に入ります。持っているキャラが出た場合はランクアップ</p>
+    <div class="gacha-btns">
+      <button class="btn big" id="btn-gacha-1">1回引く<br><small id="gacha-cost-1"></small></button>
+      <button class="btn big" id="btn-gacha-10">10連引く<br><small id="gacha-cost-10"></small></button>
+    </div>
+    <div class="gacha-result" id="gacha-result" hidden></div>
+  </section>
+
+  <!-- ===== キャンペーン: バトル ===== -->
+  <section class="screen" id="s-camp-battle">
+    <div class="hud-top">
+      <div class="hud-item wave-tag" id="camp-wave-tag">Wave 1/8</div>
+      <div class="hud-item hp" id="camp-hp-wrap">
+        <span>🏯HP</span>
+        <div class="bar hp-bar"><div class="bar-fill" id="camp-hp-fill"></div></div>
+        <span id="camp-hp-text">20</span>
+      </div>
+      <div class="hud-item camp-prep" id="camp-prep-wrap" hidden>
+        <span id="camp-prep-text">次のウェーブまで 6</span>
+        <button class="btn small" id="btn-camp-skip">スキップ</button>
+      </div>
+    </div>
+    <div class="board-wrap">
+      <canvas id="c-board" width="800" height="450"></canvas>
+      <div class="place-hint" id="camp-place-hint" hidden></div>
+    </div>
+    <div class="hud-bottom">
+      <div class="resource-line">
+        <span>💰ゴールド</span>
+        <span id="camp-gold-val">220</span>
+      </div>
+      <div class="shop-row" id="camp-shop-row"></div>
+      <div class="sell-panel" id="camp-sell-panel" hidden>
+        <span id="camp-sell-info"></span>
+        <button class="btn small" id="btn-camp-levelup">⬆レベルアップ</button>
+        <button class="btn small danger" id="btn-camp-sell">売却</button>
+        <button class="btn small ghost" id="btn-camp-sell-cancel">閉じる</button>
+      </div>
+    </div>
+    <button class="btn ghost tiny" id="btn-camp-quit">✕ やめる</button>
+  </section>
+
+  <!-- ===== キャンペーン: 結果 ===== -->
+  <section class="screen" id="s-camp-result">
+    <h2 id="camp-result-title">ステージクリア!</h2>
+    <p class="sub" id="camp-result-detail"></p>
+    <div class="coin-earn" id="camp-coin-earn"></div>
+    <div class="menu-col">
+      <button class="btn big" id="btn-camp-next">次のステージへ</button>
+      <button class="btn ghost" id="btn-camp-retry">同じステージに再挑戦</button>
+      <button class="btn ghost" id="btn-camp-result-back">ステージ選択に戻る</button>
+    </div>
   </section>
 
   <!-- ===== 役割/難易度選択 (CPU対戦) ===== -->
@@ -161,5 +259,9 @@
 <script src="js/cpu.js"></script>
 <script src="js/online.js"></script>
 <script src="js/main.js"></script>
+<script src="js/campaign-data.js"></script>
+<script src="js/meta.js"></script>
+<script src="js/campaign-sim.js"></script>
+<script src="js/campaign-ui.js"></script>
 </body>
 </html>
