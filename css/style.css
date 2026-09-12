@@ -86,6 +86,14 @@ h2 { margin: 20px 0 6px; }
 .bar-fill { height: 100%; background: linear-gradient(90deg, #4ade80, #22c55e); transition: width 0.2s; }
 .role-tag { background: #1b2745; padding: 3px 10px; border-radius: 10px; font-weight: 700; }
 .net-status { font-size: 0.8rem; color: #9fb0cc; }
+.speed-ctrl { gap: 4px; }
+.speed-btn {
+  font-size: 0.78rem; padding: 5px 9px; border-radius: 8px; border: 1px solid #263252;
+  background: #131c30; color: #9fb0cc; cursor: pointer;
+}
+.speed-btn.sel { background: #3a6bff; border-color: #3a6bff; color: #fff; font-weight: 700; }
+.speed-ctrl.readonly .speed-btn { cursor: default; opacity: 0.55; pointer-events: none; }
+.speed-ctrl.readonly .speed-btn.sel { opacity: 0.9; }
 
 .board-wrap { position: relative; width: 100%; max-width: 800px; touch-action: none; }
 #board { width: 100%; height: auto; display: block; background: #0f1830; border-radius: 10px; border: 2px solid #1e2a4a; }

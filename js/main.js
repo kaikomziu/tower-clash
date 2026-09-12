@@ -24,9 +24,26 @@ const G = {
   lastBroadcast: 0,
   rafId: null,
   lastTs: 0,
+  speedMul: 1,
 };
 
 $("ver-tag").textContent = "v" + TOWERCLASH_VERSION;
+
+// ===== 倍速コントロール(ホスト権威: オンライン対戦ではホストのみ変更可) =====
+document.querySelectorAll("#speed-ctrl .speed-btn").forEach((btn) => {
+  btn.onclick = () => {
+    if (G.mode === "online" && !G.isHost) return;
+    G.speedMul = Number(btn.dataset.speed);
+    if (G.mode === "online" && G.isHost) G.online.send("speed", { mul: G.speedMul });
+    updateSpeedButtons();
+  };
+});
+function updateSpeedButtons() {
+  document.querySelectorAll("#speed-ctrl .speed-btn").forEach((b) => {
+    b.classList.toggle("sel", Number(b.dataset.speed) === G.speedMul);
+  });
+  $("speed-ctrl").classList.toggle("readonly", G.mode === "online" && !G.isHost);
+}
 
 // ===== タイトル =====
 $("btn-help").onclick = () => showScreen("s-help");
@@ -157,6 +174,8 @@ function startMatch(opts) {
   G.peerDisconnected = false;
   G.resultShown = false;
   G.snapPrev = null; G.snapCur = null;
+  G.speedMul = 1;
+  updateSpeedButtons();
   $("hud-net-status").hidden = true;
 
   const iAmAuthority = G.mode === "cpu" || (G.mode === "online" && G.isHost);
@@ -185,6 +204,7 @@ function startMatch(opts) {
       $("hud-net-status").textContent = "⚠️ 相手が切断しました";
       showDisconnectResult();
     });
+    session.on("speed", (data) => { G.speedMul = data.mul; updateSpeedButtons(); });
     $("hud-net-status").hidden = false;
     $("hud-net-status").textContent = "🌐 接続中";
   }
@@ -301,14 +321,14 @@ function getCurrentData() {
 // ===== メインループ =====
 // tabが非アクティブ化されてrAFが間引かれても、経過時間を固定刻みで消化して追いつく(取りこぼし防止)
 const FIXED_DT = 1 / 60;
-const MAX_CATCHUP_STEPS = 90;
+const MAX_CATCHUP_STEPS = 270;
 let simAcc = 0;
 function loop(ts) {
   const frameDt = Math.min(1.5, Math.max(0, (ts - G.lastTs) / 1000));
   G.lastTs = ts;
 
   if (G.sim && !G.peerDisconnected) {
-    simAcc += frameDt;
+    simAcc += frameDt * G.speedMul;
     let steps = 0;
     while (simAcc >= FIXED_DT && steps < MAX_CATCHUP_STEPS && !G.sim.over) {
       G.sim.tick(FIXED_DT);

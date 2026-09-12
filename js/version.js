@@ -1,6 +1,13 @@
 // ===== 更新履歴 =====
-const TOWERCLASH_VERSION = "1.0.0";
+const TOWERCLASH_VERSION = "1.1.0";
 const CHANGELOG = [
+  {
+    version: "1.1.0",
+    date: "2026-09-12",
+    notes: [
+      "対戦画面に1倍速/2倍速/3倍速の切り替えを追加。オンライン対戦ではホストのみ変更可能(ゲスト側は現在の倍速を表示するだけ)",
+    ],
+  },
   {
     version: "1.0.0",
     date: "2026-09-12",
