@@ -76,6 +76,13 @@ class CampaignSim {
     });
   }
 
+  // ダメージ適用+演出用のヒット情報をイベントに積む(与ダメージ数値の表示などに使う)
+  _hit(e, amount, color, crit) {
+    e.hp -= amount;
+    const p = this.pointOnPath(e.dist);
+    this.events.push({ k: "hit", x: p.x, y: p.y, amount: Math.round(amount), color, crit: !!crit });
+  }
+
   applyPlaceTower(col, row, charId) {
     if (this.over) return false;
     const def = this.charDefs[charId];
@@ -217,21 +224,23 @@ class CampaignSim {
       t.atkCount = (t.atkCount || 0) + 1;
       const special = def.special;
       const tp = this.pointOnPath(target.dist);
-      this.projectiles.push({ id: this._nextId++, x: tx, y: ty, tx: tp.x, ty: tp.y, color: def.color, t: 0, life: 0.18 });
+      this.projectiles.push({ id: this._nextId++, x: tx, y: ty, tx: tp.x, ty: tp.y, color: def.color, t: 0, life: 0.18, kind: inst.kind });
+      this.events.push({ k: "fire", towerId: t.id, kind: inst.kind }); // タワーの発射反動アニメ用
 
       if (inst.kind === "splash") {
         // 古竜の特殊: 一定回数ごとに画面全体を巻き込む大爆発
         const isNova = special && special.kind === "novaEvery" && t.atkCount % special.n === 0;
         const radius = isNova ? Infinity : inst.splash;
+        if (isNova) this.events.push({ k: "nova", x: tp.x, y: tp.y, color: def.color });
         for (const e of this.enemies) {
           const ep = this.pointOnPath(e.dist);
           if (Math.hypot(ep.x - tp.x, ep.y - tp.y) <= radius) {
-            e.hp -= dmg;
+            this._hit(e, dmg, def.color);
             if (inst.dotDmg) e.burn = { dps: inst.dotDmg, t: inst.dotDur };
           }
         }
       } else if (inst.kind === "chain") {
-        target.hp -= dmg;
+        this._hit(target, dmg, def.color);
         let lastHit = target, hitCount = 1;
         const hit = new Set([target.id]);
         let lastPoint = tp, curDmg = dmg;
@@ -245,38 +254,39 @@ class CampaignSim {
           }
           if (!next) break;
           curDmg *= inst.chainFalloff;
-          next.hp -= curDmg;
+          this._hit(next, curDmg, def.color);
           hit.add(next.id); hitCount++;
           lastHit = next;
           const np = this.pointOnPath(next.dist);
-          this.projectiles.push({ id: this._nextId++, x: lastPoint.x, y: lastPoint.y, tx: np.x, ty: np.y, color: def.color, t: 0, life: 0.16 });
+          this.projectiles.push({ id: this._nextId++, x: lastPoint.x, y: lastPoint.y, tx: np.x, ty: np.y, color: def.color, t: 0, life: 0.16, kind: "chain" });
           lastPoint = np;
         }
         // 雷撃の射手の特殊: 3体以上に連鎖したら最後の対象へ追加ダメージ
-        if (special && special.kind === "chainOverload" && hitCount >= special.minHits) lastHit.hp -= dmg * special.bonusMult;
+        if (special && special.kind === "chainOverload" && hitCount >= special.minHits) this._hit(lastHit, dmg * special.bonusMult, "#fff", true);
       } else if (inst.kind === "slow") {
-        target.hp -= dmg;
+        this._hit(target, dmg, def.color);
         // 星海の賢者の特殊: 一定回数ごとに完全凍結
         if (special && special.kind === "freezeEvery" && t.atkCount % special.n === 0) {
           target.slow = { factor: 1, t: special.dur };
+          this.events.push({ k: "freeze", x: tp.x, y: tp.y });
         } else if (!target.slow || target.slow.factor <= inst.slow) {
           target.slow = { factor: inst.slow, t: inst.slowDur };
         }
       } else if (inst.kind === "dot") {
-        target.hp -= dmg;
+        this._hit(target, dmg, def.color);
         // 業火の魔道士の特殊: 炎上中の敵が死ぬと周囲に延焼(死亡処理側で使用)
         const spreadRadius = special && special.kind === "burnSpread" ? special.radius : 0;
         target.burn = { dps: inst.dotDmg * (1 + buff.dmgBonus), t: inst.dotDur, spreadRadius };
       } else if (inst.kind === "pull") {
-        target.hp -= dmg;
+        this._hit(target, dmg, def.color);
         target.dist = Math.max(0, target.dist - inst.pullDist);
         // 竜巻使いの特殊: 吹き飛ばした敵を一時的に完全停止
         if (special && special.kind === "stunOnPull") target.slow = { factor: 1, t: special.dur };
       } else {
-        let finalDmg = dmg;
+        let finalDmg = dmg, isCrit = false;
         // 狙撃手の特殊: 瀕死の敵に追加ダメージ
-        if (special && special.kind === "execute" && target.hp / target.hpMax <= special.threshold) finalDmg *= (1 + special.mult);
-        target.hp -= finalDmg;
+        if (special && special.kind === "execute" && target.hp / target.hpMax <= special.threshold) { finalDmg *= (1 + special.mult); isCrit = true; }
+        this._hit(target, finalDmg, def.color, isCrit);
         // 剣豪の特殊: 確率で即座にもう一度攻撃
         if (special && special.kind === "doubleAttack" && Math.random() < special.chance) {
           let target2 = null;
@@ -286,8 +296,8 @@ class CampaignSim {
           }
           if (target2) {
             const tp2 = this.pointOnPath(target2.dist);
-            this.projectiles.push({ id: this._nextId++, x: tx, y: ty, tx: tp2.x, ty: tp2.y, color: def.color, t: 0, life: 0.18 });
-            target2.hp -= dmg;
+            this.projectiles.push({ id: this._nextId++, x: tx, y: ty, tx: tp2.x, ty: tp2.y, color: def.color, t: 0, life: 0.18, kind: "single" });
+            this._hit(target2, dmg, def.color);
           }
         }
       }
@@ -297,8 +307,8 @@ class CampaignSim {
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const dead = this.enemies[i];
       if (dead.hp <= 0) {
+        const dp = this.pointOnPath(dead.dist);
         if (dead.burn && dead.burn.spreadRadius) {
-          const dp = this.pointOnPath(dead.dist);
           for (const e of this.enemies) {
             if (e === dead || e.burn) continue;
             const ep = this.pointOnPath(e.dist);
@@ -308,7 +318,7 @@ class CampaignSim {
           }
         }
         this.gold += dead.gold;
-        this.events.push({ k: "kill", type: dead.type });
+        this.events.push({ k: "kill", type: dead.type, x: dp.x, y: dp.y });
         this.enemies.splice(i, 1);
       }
     }

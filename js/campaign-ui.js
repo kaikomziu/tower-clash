@@ -10,7 +10,7 @@ function updateCoinDisplays() {
 }
 
 // ===== タイトル→キャンペーンホーム =====
-$("btn-campaign").onclick = () => { updateCoinDisplays(); updateDailyBadges(); showScreen("s-camp-home"); };
+$("btn-campaign").onclick = () => { updateCoinDisplays(); updateDailyBadges(); updatePowerDisplays(); showScreen("s-camp-home"); };
 $("btn-camp-home-back").onclick = () => showScreen("s-title");
 $("btn-camp-stages").onclick = () => { renderStageGrid(); $("stage-detail").hidden = true; showScreen("s-camp-stages"); };
 $("btn-camp-roster").onclick = () => { renderRoster(); showScreen("s-camp-roster"); };
@@ -101,6 +101,7 @@ function formatCharStats(effDef) {
 
 function renderRoster() {
   updateCoinDisplays();
+  updatePowerDisplays();
   const grid = $("char-grid");
   grid.innerHTML = "";
   const loadout = Meta.getLoadout();
@@ -141,7 +142,7 @@ function renderRoster() {
       lvBtn.disabled = cost === null || Meta.data.coins < cost;
       lvBtn.onclick = (e) => {
         e.stopPropagation(); // カード本体のクリック(編成選択)に伝播させない
-        if (Meta.levelUpWithCoins(id)) renderRoster();
+        if (Meta.levelUpWithCoins(id)) { checkAndToastAchievements(); renderRoster(); }
       };
       card.appendChild(lvBtn);
     }
@@ -159,19 +160,42 @@ function renderGachaScreen() {
   $("btn-gacha-1").disabled = Meta.data.coins < GACHA_COST_SINGLE;
   $("btn-gacha-10").disabled = Meta.data.coins < GACHA_COST_TEN;
 }
-$("btn-gacha-1").onclick = () => { const r = Meta.pullOnce(); if (r) showGachaResults([r]); };
-$("btn-gacha-10").onclick = () => { const rs = Meta.pullTen(); if (rs) showGachaResults(rs); };
+// ガチャ演出: 結果はすぐに表示せず、いったんベールで隠してタップで開封させる(ソシャゲでおなじみの「もったいぶり」)
+let pendingGachaResults = null;
+$("btn-gacha-1").onclick = () => { const r = Meta.pullOnce(); if (r) openGachaVeil([r]); };
+$("btn-gacha-10").onclick = () => { const rs = Meta.pullTen(); if (rs) openGachaVeil(rs); };
+function openGachaVeil(results) {
+  pendingGachaResults = results;
+  $("gacha-result").hidden = true;
+  $("gacha-veil").hidden = false;
+}
+$("gacha-veil").onclick = () => {
+  $("gacha-veil").hidden = true;
+  if (pendingGachaResults) { showGachaResults(pendingGachaResults); pendingGachaResults = null; }
+};
 function showGachaResults(results) {
+  checkAndToastAchievements();
   updateCoinDisplays();
   $("btn-gacha-1").disabled = Meta.data.coins < GACHA_COST_SINGLE;
   $("btn-gacha-10").disabled = Meta.data.coins < GACHA_COST_TEN;
+
+  // ★4以上が含まれていたら開封の瞬間に画面フラッシュ(一番レア度が高いものの色を使う)
+  const bestRarity = results.reduce((m, r) => Math.max(m, r.rarity), 0);
+  if (bestRarity >= 4) {
+    const flash = $("gacha-flash");
+    flash.style.background = `radial-gradient(circle, ${RARITY_COLOR[bestRarity]} 0%, transparent 70%)`;
+    flash.classList.remove("on"); void flash.offsetWidth; // アニメーションを再生させるための強制リフロー
+    flash.classList.add("on");
+  }
+
   const wrap = $("gacha-result");
   wrap.innerHTML = "";
-  results.forEach((r) => {
+  results.forEach((r, i) => {
     const def = CHAR_DEFS[r.id];
     const card = document.createElement("div");
-    card.className = "gacha-card";
+    card.className = "gacha-card" + (r.rarity >= 4 ? ` rarity-${r.rarity}` : "");
     card.style.setProperty("--rc", RARITY_COLOR[r.rarity]);
+    card.style.animationDelay = (i * 0.12) + "s, " + (i * 0.12 + 0.4) + "s";
     const tag = r.refund ? `+${r.refund}🪙還元` : (r.isNew ? "NEW!" : "Rank Up→" + r.rank);
     card.innerHTML = `<div class="gc-emoji">${def.emoji}</div><div class="gc-name">${def.name}</div><div class="gc-rarity">${RARITY_LABEL[r.rarity]}</div><div class="gc-tag">${tag}</div>`;
     wrap.appendChild(card);
@@ -181,6 +205,9 @@ function showGachaResults(results) {
 
 // ===== バトル =====
 const CG = { sim: null, rafId: null, lastTs: 0, simAcc: 0, placingChar: null, resultShown: false, stage: null, diffKey: null };
+// 攻撃演出(与ダメージ数値・撃破エフェクト・タワー発射反動・凍結演出・古竜ノヴァのフラッシュ)。表示専用でsimの状態には影響しない
+function freshFx() { return { damageTexts: [], killBursts: [], freezeBursts: [], towerFlash: {}, novaFlash: 0, novaColor: "#fff" }; }
+CG.fx = freshFx();
 const CFIXED_DT = 1 / 60, CMAX_STEPS = 240;
 let campHoverXY = null;
 const cCanvas = $("c-board");
@@ -195,6 +222,7 @@ function startCampaignBattle(stage, diffKey, opts) {
   CG.isDaily = !!(opts && opts.isDaily);
   CG.resultShown = false;
   CG.placingChar = null;
+  CG.fx = freshFx();
   $("camp-sell-panel").hidden = true;
   $("camp-place-hint").hidden = true;
   buildCampShopRow(loadout);
@@ -243,7 +271,7 @@ cCanvas.addEventListener("click", (e) => {
   if (CG.placingChar) {
     const col = Math.floor(x / CCELL), row = Math.floor(y / CCELL);
     if (col >= 0 && row >= 0 && col < CCOLS && row < CROWS) {
-      if (CG.sim.applyPlaceTower(col, row, CG.placingChar)) Meta.trackMission("placeTower", 1);
+      if (CG.sim.applyPlaceTower(col, row, CG.placingChar)) { Meta.trackMission("placeTower", 1); Meta.trackStat("towersPlaced", 1); }
     }
     CG.placingChar = null;
     document.querySelectorAll("#camp-shop-row .shop-btn").forEach((b) => b.classList.remove("sel"));
@@ -284,6 +312,23 @@ $("btn-camp-autoskip").onclick = () => {
   if (campAutoSkip && CG.sim && CG.sim.waveState === "prep") CG.sim.applySkipPrep();
 };
 updateAutoSkipBtn();
+
+// ===== 倍速(バトル全体の進行速度。設定はlocalStorageに保存) =====
+let campSpeedMul = Number(localStorage.getItem("towerclash_campspeed")) || 1;
+function updateCampSpeedButtons() {
+  document.querySelectorAll("#camp-speed-ctrl .speed-btn").forEach((b) => {
+    b.classList.toggle("sel", Number(b.dataset.speed) === campSpeedMul);
+  });
+}
+document.querySelectorAll("#camp-speed-ctrl .speed-btn").forEach((btn) => {
+  btn.onclick = () => {
+    campSpeedMul = Number(btn.dataset.speed);
+    try { localStorage.setItem("towerclash_campspeed", String(campSpeedMul)); } catch (e) { /* ignore */ }
+    updateCampSpeedButtons();
+  };
+});
+updateCampSpeedButtons();
+
 $("btn-camp-quit").onclick = () => { CG.sim = null; showScreen("s-camp-home"); updateCoinDisplays(); };
 
 function campLoop(ts) {
@@ -291,7 +336,7 @@ function campLoop(ts) {
   CG.lastTs = ts;
   if (CG.sim) {
     if (campAutoSkip && CG.sim.waveState === "prep") CG.sim.applySkipPrep();
-    CG.simAcc += frameDt;
+    CG.simAcc += frameDt * campSpeedMul;
     let steps = 0;
     const frameEvents = [];
     while (CG.simAcc >= CFIXED_DT && steps < CMAX_STEPS && !CG.sim.over) {
@@ -303,11 +348,36 @@ function campLoop(ts) {
     if (CG.sim.over) CG.simAcc = 0;
     let killCount = 0, waveClearCount = 0;
     frameEvents.forEach((ev) => {
-      if (ev.k === "kill") killCount++;
-      else if (ev.k === "waveClear") waveClearCount++;
+      if (ev.k === "kill") {
+        killCount++;
+        CG.fx.killBursts.push({ x: ev.x || 0, y: ev.y || 0, t: 0, life: 0.35 });
+      } else if (ev.k === "waveClear") {
+        waveClearCount++;
+      } else if (ev.k === "hit") {
+        const jitterX = (Math.random() - 0.5) * 14;
+        CG.fx.damageTexts.push({ x: ev.x + jitterX, y: ev.y - 10, text: "-" + ev.amount, color: ev.crit ? "#fff" : ev.color, t: 0, life: 0.7, crit: !!ev.crit });
+      } else if (ev.k === "fire") {
+        CG.fx.towerFlash[ev.towerId] = 0.15;
+      } else if (ev.k === "nova") {
+        CG.fx.novaFlash = 0.4; CG.fx.novaColor = ev.color;
+      } else if (ev.k === "freeze") {
+        CG.fx.freezeBursts.push({ x: ev.x, y: ev.y, t: 0, life: 0.4 });
+      }
     });
-    if (killCount) Meta.trackMission("kill", killCount);
-    if (waveClearCount) Meta.trackMission("waveClear", waveClearCount);
+    if (killCount) { Meta.trackMission("kill", killCount); Meta.trackStat("enemiesKilled", killCount); }
+    if (waveClearCount) { Meta.trackMission("waveClear", waveClearCount); Meta.trackStat("wavesCleared", waveClearCount); }
+
+    // 演出タイマーの経過(実時間ベース。倍速設定の影響を受けず一定の速さで再生する)
+    const fx = CG.fx;
+    fx.damageTexts = fx.damageTexts.filter((d) => (d.t += frameDt) < d.life);
+    fx.killBursts = fx.killBursts.filter((b) => (b.t += frameDt) < b.life);
+    fx.freezeBursts = fx.freezeBursts.filter((b) => (b.t += frameDt) < b.life);
+    if (fx.novaFlash > 0) fx.novaFlash = Math.max(0, fx.novaFlash - frameDt);
+    Object.keys(fx.towerFlash).forEach((id) => {
+      fx.towerFlash[id] -= frameDt;
+      if (fx.towerFlash[id] <= 0) delete fx.towerFlash[id];
+    });
+
     campRenderAll(CG.sim);
     if (CG.sim.over && !CG.resultShown) {
       CG.resultShown = true;
@@ -346,15 +416,28 @@ function campRenderAll(sim) {
   sim.towers.forEach((t) => {
     const def = sim.charDefs[t.charId];
     const cx = t.col * CCELL + CCELL / 2, cy = t.row * CCELL + CCELL / 2;
-    cCtx.beginPath(); cCtx.arc(cx, cy, 16, 0, Math.PI * 2);
+    // 発射反動: 撃った直後だけ一瞬大きくなる
+    const flash = CG.fx.towerFlash[t.id] || 0;
+    const pulse = flash > 0 ? 1 + (flash / 0.15) * 0.35 : 1;
+    cCtx.beginPath(); cCtx.arc(cx, cy, 16 * pulse, 0, Math.PI * 2);
     cCtx.fillStyle = def.color; cCtx.fill();
-    cCtx.font = "18px sans-serif"; cCtx.fillText(def.emoji, cx, cy - 1);
+    if (flash > 0) { cCtx.strokeStyle = "#fff"; cCtx.lineWidth = 2; cCtx.stroke(); cCtx.lineWidth = 1; }
+    cCtx.font = (18 * (flash > 0 ? 1.15 : 1)) + "px sans-serif"; cCtx.fillText(def.emoji, cx, cy - 1);
     if (t.level > 1) { cCtx.font = "11px sans-serif"; cCtx.fillStyle = "#fff"; cCtx.fillText("Lv" + t.level, cx, cy + 21); }
   });
 
-  cCtx.lineWidth = 3;
-  sim.projectiles.forEach((p) => { cCtx.strokeStyle = p.color; cCtx.beginPath(); cCtx.moveTo(p.x, p.y); cCtx.lineTo(p.tx, p.ty); cCtx.stroke(); });
-  cCtx.lineWidth = 1;
+  // 飛翔体: 進捗に応じて弾が飛んでいく軌跡+先端の光る弾頭
+  sim.projectiles.forEach((p) => {
+    const frac = Math.min(1, p.t / p.life);
+    const hx = p.x + (p.tx - p.x) * frac, hy = p.y + (p.ty - p.y) * frac;
+    cCtx.strokeStyle = p.color; cCtx.globalAlpha = 0.5; cCtx.lineWidth = 2;
+    cCtx.beginPath(); cCtx.moveTo(p.x, p.y); cCtx.lineTo(hx, hy); cCtx.stroke();
+    cCtx.globalAlpha = 1; cCtx.lineWidth = 1;
+    cCtx.beginPath(); cCtx.arc(hx, hy, p.kind === "splash" ? 6 : 4, 0, Math.PI * 2);
+    cCtx.fillStyle = "#fff"; cCtx.fill();
+    cCtx.beginPath(); cCtx.arc(hx, hy, p.kind === "splash" ? 4 : 2.5, 0, Math.PI * 2);
+    cCtx.fillStyle = p.color; cCtx.fill();
+  });
 
   sim.enemies.forEach((e) => {
     const md = MONSTER_DEFS[e.type];
@@ -368,6 +451,43 @@ function campRenderAll(sim) {
     cCtx.fillStyle = hpr > 0.5 ? "#4ade80" : hpr > 0.25 ? "#facc15" : "#f87171";
     cCtx.fillRect(p.x - w / 2, barY, w * hpr, 5);
   });
+
+  // 撃破エフェクト(広がって消えるリング)
+  cCtx.lineWidth = 3;
+  CG.fx.killBursts.forEach((b) => {
+    const frac = b.t / b.life;
+    cCtx.globalAlpha = 1 - frac;
+    cCtx.strokeStyle = "#fde047";
+    cCtx.beginPath(); cCtx.arc(b.x, b.y, 10 + frac * 22, 0, Math.PI * 2); cCtx.stroke();
+  });
+  // 完全凍結エフェクト
+  CG.fx.freezeBursts.forEach((b) => {
+    const frac = b.t / b.life;
+    cCtx.globalAlpha = 1 - frac;
+    cCtx.font = (16 + frac * 14) + "px sans-serif";
+    cCtx.fillText("❄️", b.x, b.y);
+  });
+  cCtx.globalAlpha = 1; cCtx.lineWidth = 1;
+
+  // 与ダメージ数値(上に浮かびながらフェードアウト)
+  CG.fx.damageTexts.forEach((d) => {
+    const frac = d.t / d.life;
+    cCtx.globalAlpha = 1 - frac;
+    cCtx.font = (d.crit ? "bold 17px" : "13px") + " sans-serif";
+    cCtx.fillStyle = "#000a";
+    cCtx.fillText(d.text, d.x + 1, d.y - frac * 26 + 1);
+    cCtx.fillStyle = d.color;
+    cCtx.fillText(d.text, d.x, d.y - frac * 26);
+  });
+  cCtx.globalAlpha = 1;
+
+  // 古竜のノヴァ: 画面全体を巻き込むフラッシュ
+  if (CG.fx.novaFlash > 0) {
+    cCtx.globalAlpha = Math.min(0.6, (CG.fx.novaFlash / 0.4) * 0.6);
+    cCtx.fillStyle = CG.fx.novaColor;
+    cCtx.fillRect(0, 0, CBOARD_W, CBOARD_H);
+    cCtx.globalAlpha = 1;
+  }
 
   campUpdateHud(sim);
 }
@@ -397,8 +517,10 @@ function showCampResult(sim) {
   if (sim.victory) {
     Meta.trackMission("stageClear", 1);
     if (diffKey === "hard") Meta.trackMission("hardClear", 1);
+    Meta.trackStat("stagesCleared", 1);
 
     if (isDaily) {
+      Meta.trackStat("dailyStageClears", 1);
       dailyReward = Math.round(stage.baseCoin * 2.5);
       dailyGranted = Meta.claimDailyStageReward();
       if (dailyGranted) total += dailyReward;
@@ -410,6 +532,7 @@ function showCampResult(sim) {
     }
   }
   Meta.addCoins(total);
+  checkAndToastAchievements();
   Meta.grantMatchXp(Meta.getLoadout(), sim.victory ? MATCH_XP_WIN : MATCH_XP_LOSE);
   updateDailyBadges();
 
@@ -442,6 +565,65 @@ function updateDailyBadges() {
   $("badge-bonus").hidden = Meta.data.daily.bonusClaimed;
   $("badge-missions").hidden = !Meta.hasClaimableMission();
   $("badge-dailystage").hidden = Meta.isDailyStageClearedToday();
+  const prog = Meta.achievementProgress();
+  const achLabel = $("ach-btn-label");
+  if (achLabel) achLabel.textContent = `実績(${prog.unlocked}/${prog.total})`;
+}
+
+// ===== 総合戦力(編成の強さをひと目でわかる数値に) =====
+function updatePowerDisplays() {
+  const power = totalPowerOf(Meta.getLoadout());
+  Meta.updatePowerPeak(power);
+  ["home-power", "roster-power"].forEach((id) => {
+    const el = $(id);
+    if (el) el.textContent = "⚡総合戦力 " + power.toLocaleString();
+  });
+}
+
+// ===== 実績解除トースト =====
+function showAchievementToasts(list) {
+  const container = $("achievement-toast-container");
+  list.forEach((a, i) => {
+    const el = document.createElement("div");
+    el.className = "ach-toast";
+    el.innerHTML = `<span class="at-emoji">${a.emoji}</span><div><div class="at-title">🏆実績解除!</div><div class="at-name">${a.name}</div></div><span class="at-reward">+${a.reward}🪙</span>`;
+    container.appendChild(el);
+    setTimeout(() => el.classList.add("show"), 30 + i * 150);
+    setTimeout(() => {
+      el.classList.remove("show");
+      setTimeout(() => el.remove(), 400);
+    }, 3200 + i * 150);
+  });
+  updateDailyBadges();
+}
+function checkAndToastAchievements() {
+  const newly = Meta.checkAchievements();
+  if (newly.length) showAchievementToasts(newly);
+}
+
+// ===== 実績画面 =====
+$("btn-achievements").onclick = () => { renderAchievementsScreen(); showScreen("s-achievements"); };
+$("btn-achievements-back").onclick = () => { showScreen("s-camp-home"); updateCoinDisplays(); updateDailyBadges(); };
+function renderAchievementsScreen() {
+  updateCoinDisplays();
+  const prog = Meta.achievementProgress();
+  $("ach-progress-text").textContent = `解除済み ${prog.unlocked} / ${prog.total}`;
+  const list = $("ach-list");
+  list.innerHTML = "";
+  ACHIEVEMENTS.forEach((a) => {
+    const unlocked = !!Meta.data.achievements[a.id];
+    const card = document.createElement("div");
+    card.className = "ach-card" + (unlocked ? " unlocked" : "");
+    card.innerHTML = `
+      <div class="ach-emoji">${unlocked ? a.emoji : "🔒"}</div>
+      <div class="ach-body">
+        <div class="ach-name">${a.name}</div>
+        <div class="ach-desc">${a.desc}</div>
+      </div>
+      <div class="ach-reward">🪙${a.reward}</div>
+    `;
+    list.appendChild(card);
+  });
 }
 
 // ---- デイリーボーナス ----
@@ -472,7 +654,7 @@ function renderDailyBonusScreen() {
   $("btn-claim-bonus").textContent = d.bonusClaimed ? "受け取り済み" : "受け取る";
 }
 $("btn-claim-bonus").onclick = () => {
-  if (Meta.claimDailyBonus()) { renderDailyBonusScreen(); updateDailyBadges(); }
+  if (Meta.claimDailyBonus()) { checkAndToastAchievements(); renderDailyBonusScreen(); updateDailyBadges(); }
 };
 
 // ---- デイリーミッション ----
@@ -500,7 +682,7 @@ function renderDailyMissionsScreen() {
     btn.className = "btn small" + (ready ? "" : " ghost");
     btn.textContent = m.claimed ? "受取済み" : (ready ? "受け取る" : "挑戦中");
     btn.disabled = !ready;
-    btn.onclick = () => { Meta.claimMission(idx); renderDailyMissionsScreen(); updateDailyBadges(); };
+    btn.onclick = () => { Meta.claimMission(idx); checkAndToastAchievements(); renderDailyMissionsScreen(); updateDailyBadges(); };
     card.appendChild(btn);
     list.appendChild(card);
   });

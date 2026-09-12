@@ -128,6 +128,19 @@ function effectiveCharDef(id, rank, level) {
   });
 }
 
+// ===== 総合戦力(ソシャゲでおなじみの「パワー」表示用の概算値) =====
+function charPower(effDef) {
+  if (effDef.kind === "buff") return Math.round((effDef.buffDmg + effDef.buffRate) * 400 + effDef.range * 0.8);
+  const dps = effDef.dmg / effDef.cooldown;
+  let mult = 1;
+  if (effDef.kind === "splash") mult = 1.3;
+  else if (effDef.kind === "chain") mult = 1.15;
+  return Math.round(dps * mult * 12 + effDef.range * 0.6);
+}
+function totalPowerOf(charIds) {
+  return (charIds || []).reduce((sum, id) => sum + charPower(effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id))), 0);
+}
+
 // ===== レベルアップ(コイン購入・永続) =====
 const LEVEL_UP_COST_BASE = 60, LEVEL_UP_COST_PER = 40;
 function levelUpCoinCost(level) {

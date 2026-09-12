@@ -13,7 +13,7 @@
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8F%B0%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/style.css?v=2">
+<link rel="stylesheet" href="css/style.css?v=3">
 </head>
 <body>
 <div id="app">
@@ -42,6 +42,8 @@
         <li>キャラにはコインで上げられる永続レベル(最大Lv20)もあり、試合終了時にも経験値が入って自動で上がります(戦闘中だけのLv1-3とは別物)</li>
         <li>ステージをクリアすると次のステージが解放されます</li>
       </ul>
+      <h3>🏆 デイリー・実績</h3>
+      <p>ホーム画面から「🎁デイリーボーナス」(7日サイクルの毎日ログイン報酬)、「📋デイリーミッション」(毎日3件のお題)、「🗓️デイリーステージ」(日替わりの特別ステージ)、「🏆実績」(育成・ガチャ・戦闘の記録に応じたトロフィー)に挑戦できます。</p>
       <h3>🌐 オンライン対戦(サブ要素)</h3>
       <p>防衛側(タワーで守る)と侵略側(敵を送り込む)に分かれて戦う非対称対戦。5桁ルームコードでPC・スマホ同士で1対1対戦できます。防衛側は自分が編成したキャラ(ランクも反映)をそのまま持ち込んで戦えます。</p>
     </div>
@@ -55,6 +57,7 @@
       <div class="coin-badge">🪙 <span id="camp-coin-val">0</span></div>
     </div>
     <h1 class="logo small">TOWER<span>×</span>CLASH</h1>
+    <div class="power-display" id="home-power">⚡総合戦力 0</div>
     <div class="menu-col">
       <button class="btn hero" id="btn-camp-stages">⚔️ ステージへ出撃</button>
       <button class="btn big" id="btn-camp-gacha">🎰 ガチャを引く</button>
@@ -73,10 +76,24 @@
         <span class="db-icon">🗓️</span><span class="db-label">デイリー</span>
         <span class="db-badge" id="badge-dailystage" hidden>!</span>
       </button>
+      <button class="daily-btn" id="btn-achievements">
+        <span class="db-icon">🏆</span><span class="db-label" id="ach-btn-label">実績</span>
+      </button>
     </div>
     <div class="menu-col">
       <button class="btn ghost" id="btn-online">🌐 オンライン対戦(サブ)</button>
     </div>
+  </section>
+
+  <!-- ===== 実績 ===== -->
+  <section class="screen" id="s-achievements">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-achievements-back">← もどる</button>
+      <div class="coin-badge">🪙 <span id="ach-coin-val">0</span></div>
+    </div>
+    <h2>🏆 実績</h2>
+    <p class="sub" id="ach-progress-text"></p>
+    <div class="ach-list" id="ach-list"></div>
   </section>
 
   <!-- ===== デイリーボーナス ===== -->
@@ -137,6 +154,7 @@
       <div class="coin-badge">🪙 <span id="roster-coin-val">0</span></div>
     </div>
     <h2>キャラ編成</h2>
+    <div class="power-display small" id="roster-power">⚡総合戦力 0</div>
     <p class="sub">出撃に連れて行くキャラを最大<span id="roster-max"></span>体まで選択(タップで選択/解除)</p>
     <div class="char-grid" id="char-grid"></div>
   </section>
@@ -154,6 +172,11 @@
       <button class="btn big" id="btn-gacha-10">10連引く<br><small id="gacha-cost-10"></small></button>
     </div>
     <div class="gacha-result" id="gacha-result" hidden></div>
+    <div class="gacha-veil" id="gacha-veil" hidden>
+      <div class="gacha-veil-orb">🎁</div>
+      <p class="gacha-veil-text">タップして結果を見る</p>
+    </div>
+    <div class="gacha-flash" id="gacha-flash"></div>
   </section>
 
   <!-- ===== キャンペーン: バトル ===== -->
@@ -164,6 +187,11 @@
         <span>🏯HP</span>
         <div class="bar hp-bar"><div class="bar-fill" id="camp-hp-fill"></div></div>
         <span id="camp-hp-text">20</span>
+      </div>
+      <div class="hud-item speed-ctrl" id="camp-speed-ctrl">
+        <button class="speed-btn" data-speed="1">1倍速</button>
+        <button class="speed-btn" data-speed="2">2倍速</button>
+        <button class="speed-btn" data-speed="3">3倍速</button>
       </div>
       <button class="hud-item autoskip-btn" id="btn-camp-autoskip">🔁自動スキップ:OFF</button>
       <div class="hud-item camp-prep" id="camp-prep-wrap" hidden>
@@ -288,15 +316,17 @@
     </div>
   </section>
 
+  <div id="achievement-toast-container"></div>
 </div>
 
-<script src="js/version.js?v=4"></script>
-<script src="js/sim.js?v=4"></script>
-<script src="js/online.js?v=4"></script>
-<script src="js/campaign-data.js?v=4"></script>
-<script src="js/meta.js?v=4"></script>
-<script src="js/campaign-sim.js?v=4"></script>
-<script src="js/main.js?v=4"></script>
-<script src="js/campaign-ui.js?v=4"></script>
+<script src="js/version.js?v=6"></script>
+<script src="js/sim.js?v=6"></script>
+<script src="js/online.js?v=6"></script>
+<script src="js/campaign-data.js?v=6"></script>
+<script src="js/achievements.js?v=6"></script>
+<script src="js/meta.js?v=6"></script>
+<script src="js/campaign-sim.js?v=6"></script>
+<script src="js/main.js?v=6"></script>
+<script src="js/campaign-ui.js?v=6"></script>
 </body>
 </html>

@@ -13,6 +13,13 @@ function metaDefault() {
     stageProgress: {}, // { [stageId]: { easy:true/false, normal:.., hard:.. } }
     loadout: STARTER_CHARS.slice(),
     daily: null, // ensureDaily()で日付が変わるたびに生成し直す
+    achievements: {}, // { [achievementId]: true }
+    stats: { // 実績判定に使う累計スタッツ
+      stagesCleared: 0, dailyStageClears: 0, gachaPulls: 0, towersPlaced: 0,
+      enemiesKilled: 0, wavesCleared: 0, coinsEarnedTotal: 0, levelUpsBought: 0,
+      loginDays: 0, onlineWins: 0, dailyBonusClaims: 0, dailyMissionsClaimed: 0,
+      totalPowerPeak: 0,
+    },
   };
 }
 
@@ -22,7 +29,11 @@ function metaLoad() {
     if (!raw) return metaDefault();
     const data = JSON.parse(raw);
     const def = metaDefault();
-    return Object.assign(def, data, { owned: Object.assign({}, def.owned, data.owned || {}) });
+    return Object.assign(def, data, {
+      owned: Object.assign({}, def.owned, data.owned || {}),
+      stats: Object.assign({}, def.stats, data.stats || {}),
+      achievements: Object.assign({}, def.achievements, data.achievements || {}),
+    });
   } catch (e) {
     return metaDefault();
   }
@@ -58,10 +69,45 @@ const Meta = {
     return first;
   },
 
-  addCoins(n) { this.data.coins = Math.max(0, this.data.coins + Math.round(n)); this.save(); },
+  addCoins(n) {
+    const rounded = Math.round(n);
+    this.data.coins = Math.max(0, this.data.coins + rounded);
+    if (rounded > 0) this.trackStat("coinsEarnedTotal", rounded);
+    this.save();
+  },
   spendCoins(n) {
     if (this.data.coins < n) return false;
     this.data.coins -= n; this.save(); return true;
+  },
+
+  // ===== 実績(トロフィー) =====
+  trackStat(key, amount) {
+    if (!this.data.stats) this.data.stats = metaDefault().stats;
+    this.data.stats[key] = (this.data.stats[key] || 0) + amount;
+  },
+  updatePowerPeak(current) {
+    if (!this.data.stats) this.data.stats = metaDefault().stats;
+    if (current > (this.data.stats.totalPowerPeak || 0)) { this.data.stats.totalPowerPeak = current; this.save(); }
+  },
+  // 未解除の実績のうち条件を満たしたものを解除し、報酬コインを付与。新規解除の配列を返す
+  checkAchievements() {
+    if (!this.data.achievements) this.data.achievements = {};
+    const newly = [];
+    ACHIEVEMENTS.forEach((a) => {
+      if (this.data.achievements[a.id]) return;
+      if (a.check(this.data.stats, this.data)) {
+        this.data.achievements[a.id] = true;
+        newly.push(a);
+      }
+    });
+    if (newly.length) {
+      this.save();
+      newly.forEach((a) => this.addCoins(a.reward));
+    }
+    return newly;
+  },
+  achievementProgress() {
+    return { unlocked: Object.keys(this.data.achievements || {}).length, total: ACHIEVEMENT_TOTAL_COUNT };
   },
 
   getLoadout() {
@@ -87,6 +133,7 @@ const Meta = {
     if (cost === null) return false;
     if (!this.spendCoins(cost)) return false;
     this.data.owned[id].level = this.levelOf(id) + 1;
+    this.trackStat("levelUpsBought", 1);
     this.save();
     return true;
   },
@@ -129,6 +176,7 @@ const Meta = {
       owned.rank++; rank = owned.rank;
     }
     this.trackMission("gacha", 1);
+    this.trackStat("gachaPulls", 1);
     this.save();
     return { id, isNew, rank, refund, rarity };
   },
@@ -156,6 +204,7 @@ const Meta = {
       d.bonusClaimed = false;
       d.missions = generateDailyMissions();
       if (d.lastClaimDate && daysBetween(d.lastClaimDate, today) > 1) d.bonusStreak = 0;
+      this.trackStat("loginDays", 1);
       this.save();
     }
   },
@@ -169,6 +218,7 @@ const Meta = {
     const reward = DAILY_BONUS_TABLE[(d.bonusStreak - 1) % DAILY_BONUS_TABLE.length];
     d.bonusClaimed = true;
     d.lastClaimDate = todayStr();
+    this.trackStat("dailyBonusClaims", 1);
     this.addCoins(reward);
     this.save();
     return { streak: d.bonusStreak, reward };
@@ -190,6 +240,7 @@ const Meta = {
     const m = this.data.daily.missions[idx];
     if (!m || m.claimed || m.progress < m.target) return null;
     m.claimed = true;
+    this.trackStat("dailyMissionsClaimed", 1);
     this.addCoins(m.reward);
     this.save();
     return m.reward;

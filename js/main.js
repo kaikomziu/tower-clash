@@ -458,6 +458,8 @@ function updateHud(data) {
 function showResult(winner, reason) {
   const iWin = winner === G.myRole;
   if (G.myRole === "defender") Meta.grantMatchXp(Meta.getLoadout(), iWin ? MATCH_XP_WIN : MATCH_XP_LOSE);
+  if (iWin) Meta.trackStat("onlineWins", 1);
+  checkAndToastAchievements();
   $("result-title").textContent = iWin ? "🎉 勝利!" : "💥 敗北…";
   const reasonText = reason === "hp0"
     ? (winner === "attacker" ? "拠点のHPが0になりました" : "拠点を守り切りました")
