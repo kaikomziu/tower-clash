@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>TOWER CLASH - 防衛 vs 侵略の非対称タワーディフェンス対戦</title>
+<meta name="description" content="タワーを置いて守るか、敵を送り込んで攻めるか。PCとスマホでクロスプレイできる非対称タワーディフェンス対戦。5桁ルームコードのオンライン対戦、CPU対戦(4段階)対応。">
+<link rel="canonical" href="https://kaikomziu.github.io/tower-clash/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="TOWER CLASH">
+<meta property="og:description" content="防衛側はタワーで守り、侵略側は敵を送り込む。PC・スマホでクロスプレイできる非対称タワーディフェンス対戦。">
+<meta property="og:url" content="https://kaikomziu.github.io/tower-clash/">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8F%B0%3C/text%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link rel="stylesheet" href="css/style.css?v=1">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===== タイトル ===== -->
+  <section class="screen on" id="s-title">
+    <h1 class="logo">TOWER<span>×</span>CLASH</h1>
+    <p class="tag">守るか、攻めるか。非対称タワーディフェンス対戦</p>
+    <div class="menu-col">
+      <button class="btn big" id="btn-cpu">⚡ CPU対戦</button>
+      <button class="btn big" id="btn-online">🌐 オンライン対戦(2端末)</button>
+      <button class="btn ghost" id="btn-help">❓ あそびかた</button>
+    </div>
+    <p class="ver" id="ver-tag"></p>
+  </section>
+
+  <!-- ===== あそびかた ===== -->
+  <section class="screen" id="s-help">
+    <h2>あそびかた</h2>
+    <div class="help-box">
+      <h3>🛡️ 防衛側</h3>
+      <p>ゴールドは自動で貯まります。タワーを買って通り道のそばに設置し、進んでくる敵を迎撃してください。制限時間(3分)までHPが0にならなければ勝利です。</p>
+      <ul>
+        <li>🏹 アロー塔: 安くて連射が速い単体攻撃</li>
+        <li>💣 キャノン塔: 範囲攻撃、まとまった敵に強い</li>
+        <li>❄️ フロスト塔: 威力は低いが敵を遅くする</li>
+      </ul>
+      <p>設置したタワーをタップすると60%還元で売却できます。</p>
+      <h3>⚔️ 侵略側</h3>
+      <p>マナは自動で貯まります。ユニットを送り込んで拠点までたどり着かせましょう。制限時間内にHPを0にすれば勝利です。</p>
+      <ul>
+        <li>👾 グラント: バランス型</li>
+        <li>⚡ ランナー: 速いがHPは低い</li>
+        <li>🛡️ タンク: 遅いが硬く、拠点に与えるダメージも大きい</li>
+      </ul>
+      <p>スマホとPCで役割を分けて対戦するのがおすすめです。</p>
+    </div>
+    <button class="btn ghost" id="btn-help-back">← もどる</button>
+  </section>
+
+  <!-- ===== 役割/難易度選択 (CPU対戦) ===== -->
+  <section class="screen" id="s-cpu-setup">
+    <h2>CPU対戦の設定</h2>
+    <p class="sub">あなたの役割を選んでください</p>
+    <div class="role-pick">
+      <button class="role-card" data-role="defender">
+        <div class="ricon">🛡️</div><div class="rname">防衛側</div><div class="rdesc">タワーで守る</div>
+      </button>
+      <button class="role-card" data-role="attacker">
+        <div class="ricon">⚔️</div><div class="rname">侵略側</div><div class="rdesc">敵を送り込む</div>
+      </button>
+    </div>
+    <p class="sub">CPUの強さ</p>
+    <div class="level-pick" id="level-pick"></div>
+    <button class="btn big" id="btn-cpu-start" disabled>対戦開始</button>
+    <button class="btn ghost" id="btn-cpu-back">← もどる</button>
+  </section>
+
+  <!-- ===== オンライン: 役割選択→ルーム作成/参加 ===== -->
+  <section class="screen" id="s-online">
+    <h2>オンライン対戦</h2>
+    <div class="online-tabs">
+      <button class="tab-btn on" id="tab-create">部屋を作る</button>
+      <button class="tab-btn" id="tab-join">部屋に入る</button>
+    </div>
+
+    <div id="pane-create" class="online-pane">
+      <p class="sub">自分の役割を選んでください(相手は自動でもう一方になります)</p>
+      <div class="role-pick">
+        <button class="role-card" data-role="defender">
+          <div class="ricon">🛡️</div><div class="rname">防衛側</div><div class="rdesc">タワーで守る</div>
+        </button>
+        <button class="role-card" data-role="attacker">
+          <div class="ricon">⚔️</div><div class="rname">侵略側</div><div class="rdesc">敵を送り込む</div>
+        </button>
+      </div>
+      <button class="btn big" id="btn-create-room" disabled>部屋を作成</button>
+      <div class="room-wait" id="room-wait" hidden>
+        <p class="sub">合言葉コードをもう一方の端末に伝えてください</p>
+        <div class="room-code" id="room-code-display">-----</div>
+        <p class="waiting-msg" id="waiting-msg">相手の参加を待っています…</p>
+      </div>
+    </div>
+
+    <div id="pane-join" class="online-pane" hidden>
+      <p class="sub">ホストから伝えられた5桁コードを入力</p>
+      <input id="join-code-input" class="code-input" maxlength="5" placeholder="ABCDE" autocomplete="off" spellcheck="false">
+      <button class="btn big" id="btn-join-room">参加する</button>
+      <p class="join-status" id="join-status"></p>
+    </div>
+
+    <button class="btn ghost" id="btn-online-back">← もどる</button>
+  </section>
+
+  <!-- ===== 対戦画面 ===== -->
+  <section class="screen" id="s-game">
+    <div class="hud-top">
+      <div class="hud-item timer">⏱ <span id="hud-timer">3:00</span></div>
+      <div class="hud-item hp" id="hud-hp-wrap">
+        <span>🏯HP</span>
+        <div class="bar hp-bar"><div class="bar-fill" id="hud-hp-fill"></div></div>
+        <span id="hud-hp-text">20</span>
+      </div>
+      <div class="hud-item role-tag" id="hud-role-tag"></div>
+      <div class="hud-item net-status" id="hud-net-status" hidden></div>
+    </div>
+    <div class="board-wrap">
+      <canvas id="board" width="800" height="450"></canvas>
+      <div class="place-hint" id="place-hint" hidden></div>
+    </div>
+    <div class="hud-bottom" id="hud-bottom">
+      <div class="resource-line">
+        <span id="hud-resource-label">💰ゴールド</span>
+        <span id="hud-resource-val">150</span>
+      </div>
+      <div class="shop-row" id="shop-row"></div>
+      <div class="sell-panel" id="sell-panel" hidden>
+        <span id="sell-info"></span>
+        <button class="btn small danger" id="btn-sell">売却</button>
+        <button class="btn small ghost" id="btn-sell-cancel">キャンセル</button>
+      </div>
+    </div>
+    <button class="btn ghost tiny" id="btn-quit">✕ やめる</button>
+  </section>
+
+  <!-- ===== 結果画面 ===== -->
+  <section class="screen" id="s-result">
+    <h2 id="result-title">勝利!</h2>
+    <p id="result-reason" class="sub"></p>
+    <div class="menu-col">
+      <button class="btn big" id="btn-rematch">もう一度</button>
+      <button class="btn ghost" id="btn-to-title">タイトルへ</button>
+    </div>
+  </section>
+
+</div>
+
+<script src="js/version.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/cpu.js"></script>
+<script src="js/online.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
