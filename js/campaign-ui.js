@@ -133,10 +133,10 @@ function openStageDetail(st) {
   $("sd-title").textContent = st.emoji + " " + st.name;
   $("sd-desc").textContent = st.desc;
   renderDiffPick();
-  // 協力プレイ中はエンドレス/討伐戦は非対応、出撃ボタンの表記も変える
-  $("btn-stage-launch-endless").hidden = COOP.active;
-  $("btn-stage-launch-bossrush").hidden = COOP.active;
+  // 協力プレイ中は出撃ボタンの表記を変える(エンドレス/討伐戦も協力プレイ対応)
   $("btn-stage-launch").textContent = COOP.active ? "🤝 一緒に出撃" : "出撃";
+  $("btn-stage-launch-endless").textContent = COOP.active ? "🤝♾️ 一緒にエンドレス" : "♾️エンドレスに挑戦";
+  $("btn-stage-launch-bossrush").textContent = COOP.active ? "🤝👹 一緒に討伐戦" : "👹討伐戦に挑戦";
   $("stage-detail").hidden = false;
 }
 function renderDiffPick() {
@@ -155,15 +155,17 @@ function renderDiffPick() {
 $("btn-stage-detail-close").onclick = () => { $("stage-detail").hidden = true; };
 $("btn-stage-launch").onclick = () => {
   if (Meta.getLoadout().length === 0) { alert("キャラ編成で出撃するキャラを選んでください"); return; }
-  if (COOP.active) { startCoopBattleHost(CG_selectedStage, CG_selectedDiff); return; }
+  if (COOP.active) { startCoopBattleHost(CG_selectedStage, CG_selectedDiff, "normal"); return; }
   startCampaignBattle(CG_selectedStage, CG_selectedDiff);
 };
 $("btn-stage-launch-endless").onclick = () => {
   if (Meta.getLoadout().length === 0) { alert("キャラ編成で出撃するキャラを選んでください"); return; }
+  if (COOP.active) { startCoopBattleHost(CG_selectedStage, CG_selectedDiff, "endless"); return; }
   startCampaignBattle(CG_selectedStage, CG_selectedDiff, { mode: "endless" });
 };
 $("btn-stage-launch-bossrush").onclick = () => {
   if (Meta.getLoadout().length === 0) { alert("キャラ編成で出撃するキャラを選んでください"); return; }
+  if (COOP.active) { startCoopBattleHost(CG_selectedStage, CG_selectedDiff, "bossrush"); return; }
   startCampaignBattle(CG_selectedStage, CG_selectedDiff, { mode: "bossrush" });
 };
 

@@ -113,7 +113,7 @@ $("btn-coop-join").onclick = async () => {
     if (started) return;
     started = true;
     COOP.active = true;
-    startCoopBattleGuest(data.stageId, data.diffKey, data.charDefs);
+    startCoopBattleGuest(data.stageId, data.diffKey, data.mode, data.charDefs);
   });
   session.on("coopState", (data) => coopApplyGuestState(data));
   session.on("peerLeft", () => {
@@ -132,7 +132,8 @@ $("btn-coop-join").onclick = async () => {
 };
 
 // ----- 出撃(ホスト) -----
-function startCoopBattleHost(stage, diffKey) {
+function startCoopBattleHost(stage, diffKey, mode) {
+  mode = mode || "normal";
   const hostDefs = {};
   Meta.getLoadout().forEach((id) => { hostDefs[id] = applyEquipBonus(effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id)), Meta.equippedOf(id)); });
   const guestDefs = {};
@@ -141,28 +142,32 @@ function startCoopBattleHost(stage, diffKey) {
   });
   const mergedDefs = Object.assign({}, hostDefs, guestDefs);
 
-  CG.sim = new CampaignSim(stage, diffKey, mergedDefs, "normal");
+  CG.sim = new CampaignSim(stage, diffKey, mergedDefs, mode);
   CG.stage = stage; CG.diffKey = diffKey; CG.isDaily = false;
   CG.resultShown = false; CG.placingChar = null; CG.fx = freshFx(); CG.paused = false;
   $("pause-overlay").hidden = true; $("camp-sell-panel").hidden = true; $("camp-place-hint").hidden = true;
   buildCoopShopRow(Meta.getLoadout(), "");
-  $("camp-speed-ctrl").hidden = true; // 協力プレイは2人が同じ状態を見るため倍速固定
-  $("btn-camp-autoskip").hidden = true;
+  // 進行を実際にtickしているのはホストなので、倍速/自動スキップはホストのみ操作可能にする
+  $("camp-speed-ctrl").hidden = false;
+  $("btn-camp-autoskip").hidden = false;
+  updateCampSpeedButtons();
+  updateAutoSkipBtn();
   showScreen("s-camp-battle");
   CG.simAcc = 0; CG.lastTs = performance.now();
   if (!CG.rafId) CG.rafId = requestAnimationFrame(campLoop);
 
-  COOP.session.send("coopStart", { stageId: stage.id, diffKey, charDefs: mergedDefs });
+  COOP.session.send("coopStart", { stageId: stage.id, diffKey, mode, charDefs: mergedDefs });
 }
 
 // ----- 出撃(ゲスト): coopStart受信で開始 -----
-function startCoopBattleGuest(stageId, diffKey, mergedDefs) {
+function startCoopBattleGuest(stageId, diffKey, mode, mergedDefs) {
   const stage = STAGES.find((s) => s.id === stageId);
-  CG.sim = new CampaignSim(stage, diffKey, mergedDefs, "normal"); // tickは呼ばない「入れ物」として使う
+  CG.sim = new CampaignSim(stage, diffKey, mergedDefs, mode || "normal"); // tickは呼ばない「入れ物」として使う
   CG.stage = stage; CG.diffKey = diffKey; CG.isDaily = false;
   CG.resultShown = false; CG.placingChar = null; CG.fx = freshFx(); CG.paused = false;
   $("pause-overlay").hidden = true; $("camp-sell-panel").hidden = true; $("camp-place-hint").hidden = true;
   buildCoopShopRow(Meta.getLoadout(), COOP_GUEST_PREFIX);
+  // ゲストは進行を操作できない(倍速/自動スキップの決定権はホストのみ)
   $("camp-speed-ctrl").hidden = true;
   $("btn-camp-autoskip").hidden = true;
   showScreen("s-camp-battle");
@@ -280,10 +285,21 @@ function coopLeave() {
 
 function showCoopResult(sim) {
   if (sim.victory) SFX.victory(); else SFX.defeat();
+  const mode = sim.mode || "normal";
   const diff = DIFFICULTIES[CG.diffKey];
-  const total = sim.victory
-    ? sim.wavesCleared * 6 + Math.round(sim.stage.baseCoin * diff.coinMul)
-    : sim.wavesCleared * 4;
+  let total;
+  if (mode === "endless") {
+    total = sim.wavesCleared * 10 + Math.floor(sim.wavesCleared / 10) * 120;
+    Meta.trackStat("endlessRuns", 1);
+    Meta.updateEndlessBestWave(sim.wavesCleared);
+  } else if (mode === "bossrush") {
+    total = sim.wavesCleared * 45;
+    if (sim.victory) { total += Math.round(350 * diff.coinMul); Meta.trackStat("bossRushClears", 1); }
+  } else {
+    total = sim.victory
+      ? sim.wavesCleared * 6 + Math.round(sim.stage.baseCoin * diff.coinMul)
+      : sim.wavesCleared * 4;
+  }
   Meta.addCoins(total);
   Meta.trackStat("coopMatches", 1);
   if (sim.victory) Meta.trackStat("coopWins", 1);
@@ -292,18 +308,37 @@ function showCoopResult(sim) {
   updateDailyBadges();
 
   let droppedItem = null;
-  if (sim.victory) {
+  if (sim.victory || mode === "endless") {
     const dropId = rollItemDrop();
     if (dropId) { Meta.addItem(dropId, 1); droppedItem = equipItemDef(dropId); }
   }
 
-  $("camp-result-title").textContent = sim.victory ? "🎉 協力プレイ クリア!" : "💥 協力プレイ 敗北…";
-  $("camp-result-detail").textContent = sim.victory
-    ? `全${sim.stage.waveCount}ウェーブを2人で突破しました`
-    : `Wave ${sim.wavesCleared}/${sim.stage.waveCount}まで到達`;
+  if (mode === "endless") {
+    $("camp-result-title").textContent = "💥 協力プレイ 力尽きた…";
+    $("camp-result-detail").textContent = `2人で${sim.wavesCleared}ウェーブ生き延びた(自己ベスト: ${Meta.data.stats.endlessBestWave || 0}ウェーブ)`;
+  } else if (mode === "bossrush") {
+    $("camp-result-title").textContent = sim.victory ? "🎉 協力プレイ 討伐戦クリア!" : "💥 協力プレイ 討伐失敗…";
+    $("camp-result-detail").textContent = `2人でボス ${sim.wavesCleared}/${BOSS_RUSH_COUNT} 体を撃破`;
+  } else {
+    $("camp-result-title").textContent = sim.victory ? "🎉 協力プレイ クリア!" : "💥 協力プレイ 敗北…";
+    $("camp-result-detail").textContent = sim.victory
+      ? `全${sim.stage.waveCount}ウェーブを2人で突破しました`
+      : `Wave ${sim.wavesCleared}/${sim.stage.waveCount}まで到達`;
+  }
+
   let coinText = `🪙 +${total} コイン獲得`;
   if (droppedItem) coinText += ` / 🎁${droppedItem.emoji}${droppedItem.name}を入手!`;
-  $("camp-coin-earn").textContent = coinText;
+
+  // 二人分の貢献度(設置基数・投資ゴールド)を分けて表示。CharIdの"g_"接頭辞でホスト/ゲストの設置を判定
+  let myTowers = 0, myInvested = 0, partnerTowers = 0, partnerInvested = 0;
+  (sim.towers || []).forEach((t) => {
+    const isGuestChar = (t.charId || "").indexOf(COOP_GUEST_PREFIX) === 0;
+    const isMine = COOP.role === "guest" ? isGuestChar : !isGuestChar;
+    if (isMine) { myTowers++; myInvested += t.invested || 0; }
+    else { partnerTowers++; partnerInvested += t.invested || 0; }
+  });
+  const contribText = `🙋あなた: ${myTowers}基設置(${myInvested}🪙) ／ 🤝相方: ${partnerTowers}基設置(${partnerInvested}🪙)`;
+  $("camp-coin-earn").innerHTML = `${coinText}<br><span class="coop-contrib">${contribText}</span>`;
 
   $("btn-camp-next").hidden = true;
   $("btn-camp-retry").hidden = true;

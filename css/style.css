@@ -264,6 +264,7 @@ h2 { margin: 20px 0 6px; }
 
 /* 結果(キャンペーン) */
 .coin-earn { background: #1b2745; padding: 10px 18px; border-radius: 12px; font-weight: 700; color: #facc15; margin: 10px 0 24px; text-align: center; }
+.coop-contrib { display: inline-block; margin-top: 6px; font-size: 0.78rem; font-weight: 600; color: #9fb0cc; }
 
 /* ===== デイリー要素(ホーム画面の3ボタン) ===== */
 .daily-row { display: flex; gap: 10px; width: 100%; max-width: 340px; margin: 14px 0; }
