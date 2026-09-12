@@ -97,13 +97,18 @@ function gachaPickOne(forcePity) {
   return pool[pool.length - 1].id;
 }
 
-// ランクによる実効ステータス倍率(重複ガチャでランクアップ)
+// ランク(重複ガチャで上昇、上限5)とレベル(コイン購入 or 試合終了時のXPで上昇、上限20。戦闘中だけのLv1-3とは無関係な永続値)
+// の両方を反映した実効ステータスを計算する
 const MAX_RANK = 5;
-function effectiveCharDef(id, rank) {
+const MAX_LEVEL = 20;
+function effectiveCharDef(id, rank, level) {
   const base = CHAR_DEFS[id];
   const r = Math.max(1, Math.min(MAX_RANK, rank || 1));
-  const statMul = 1 + 0.1 * (r - 1);
-  const rangeMul = 1 + 0.04 * (r - 1);
+  const lv = Math.max(1, Math.min(MAX_LEVEL, level || 1));
+  const rankStatMul = 1 + 0.1 * (r - 1);
+  const levelStatMul = 1 + 0.03 * (lv - 1);
+  const statMul = rankStatMul * levelStatMul;
+  const rangeMul = 1 + 0.04 * (r - 1); // 射程はランクのみで伸びる
   return Object.assign({}, base, {
     dmg: base.dmg * statMul,
     range: base.range * rangeMul,
@@ -111,8 +116,21 @@ function effectiveCharDef(id, rank) {
     dotDmg: base.dotDmg ? base.dotDmg * statMul : base.dotDmg,
     buffDmg: base.buffDmg ? base.buffDmg * (1 + 0.06 * (r - 1)) : base.buffDmg,
     rank: r,
+    level: lv,
   });
 }
+
+// ===== レベルアップ(コイン購入・永続) =====
+const LEVEL_UP_COST_BASE = 60, LEVEL_UP_COST_PER = 40;
+function levelUpCoinCost(level) {
+  if (level >= MAX_LEVEL) return null;
+  return LEVEL_UP_COST_BASE + level * LEVEL_UP_COST_PER;
+}
+
+// ===== レベルアップ(試合終了時の経験値・永続) =====
+const MATCH_XP_WIN = 8, MATCH_XP_LOSE = 3;
+const XP_BASE = 20, XP_PER_LEVEL = 10;
+function xpToNextLevel(level) { return XP_BASE + level * XP_PER_LEVEL; }
 
 // ===== 戦闘中レベルアップ(設置後、最大3レベルまで) =====
 const BATTLE_MAX_LEVEL = 3;

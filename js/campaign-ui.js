@@ -84,14 +84,16 @@ function renderRoster() {
     const def = CHAR_DEFS[id];
     const owned = Meta.isOwned(id);
     const rank = Meta.rankOf(id);
+    const level = Meta.levelOf(id);
     const inLoadout = loadout.includes(id);
-    const card = document.createElement("button");
+    // レベルアップボタンを内包するためbutton要素ではなくdivを使う(button内button回避)
+    const card = document.createElement("div");
     card.className = "char-card" + (owned ? "" : " locked") + (inLoadout ? " sel" : "");
     card.style.setProperty("--rc", RARITY_COLOR[def.rarity]);
     card.innerHTML = `
       <div class="char-emoji">${owned ? def.emoji : "❔"}</div>
       <div class="char-name">${owned ? def.name : "？？？"}</div>
-      <div class="char-rarity">${RARITY_LABEL[def.rarity]}${owned ? " Rk" + rank : ""}</div>
+      <div class="char-rarity">${RARITY_LABEL[def.rarity]}${owned ? ` Rk${rank} Lv${level}` : ""}</div>
       ${owned ? `<div class="char-desc">${def.desc}</div>` : ""}
     `;
     if (owned) {
@@ -105,7 +107,17 @@ function renderRoster() {
         Meta.setLoadout(cur);
         renderRoster();
       };
-    } else card.disabled = true;
+      const cost = Meta.levelUpCost(id);
+      const lvBtn = document.createElement("button");
+      lvBtn.className = "char-lvup-btn";
+      lvBtn.textContent = cost === null ? "Lv MAX" : `⬆Lv (${cost}🪙)`;
+      lvBtn.disabled = cost === null || Meta.data.coins < cost;
+      lvBtn.onclick = (e) => {
+        e.stopPropagation(); // カード本体のクリック(編成選択)に伝播させない
+        if (Meta.levelUpWithCoins(id)) renderRoster();
+      };
+      card.appendChild(lvBtn);
+    }
     grid.appendChild(card);
   });
 }
@@ -150,7 +162,7 @@ const cCtx = cCanvas.getContext("2d");
 function startCampaignBattle(stage, diffKey, opts) {
   const loadout = Meta.getLoadout();
   const equippedDefs = {};
-  loadout.forEach((id) => { equippedDefs[id] = effectiveCharDef(id, Meta.rankOf(id)); });
+  loadout.forEach((id) => { equippedDefs[id] = effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id)); });
   CG.sim = new CampaignSim(stage, diffKey, equippedDefs);
   CG.stage = stage; CG.diffKey = diffKey;
   CG.isDaily = !!(opts && opts.isDaily);
@@ -371,6 +383,7 @@ function showCampResult(sim) {
     }
   }
   Meta.addCoins(total);
+  Meta.grantMatchXp(Meta.getLoadout(), sim.victory ? MATCH_XP_WIN : MATCH_XP_LOSE);
   updateDailyBadges();
 
   $("camp-result-title").textContent = sim.victory ? "🎉 ステージクリア!" : "💥 敗北…";

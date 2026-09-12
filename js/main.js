@@ -234,7 +234,7 @@ function buildShopRow() {
     $("hud-resource-label").textContent = "💰ゴールド";
     const loadout = Meta.getLoadout();
     G.localCharDefs = {};
-    loadout.forEach((id) => { G.localCharDefs[id] = effectiveCharDef(id, Meta.rankOf(id)); });
+    loadout.forEach((id) => { G.localCharDefs[id] = effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id)); });
     loadout.forEach((id) => {
       const def = G.localCharDefs[id];
       const b = document.createElement("button");
@@ -457,6 +457,7 @@ function updateHud(data) {
 // ===== 結果 =====
 function showResult(winner, reason) {
   const iWin = winner === G.myRole;
+  if (G.myRole === "defender") Meta.grantMatchXp(Meta.getLoadout(), iWin ? MATCH_XP_WIN : MATCH_XP_LOSE);
   $("result-title").textContent = iWin ? "🎉 勝利!" : "💥 敗北…";
   const reasonText = reason === "hp0"
     ? (winner === "attacker" ? "拠点のHPが0になりました" : "拠点を守り切りました")

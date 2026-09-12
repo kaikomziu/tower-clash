@@ -5,7 +5,7 @@ const META_KEY = "towerclash_campaign_v1";
 
 function metaDefault() {
   const owned = {};
-  STARTER_CHARS.forEach((id) => (owned[id] = { rank: 1 }));
+  STARTER_CHARS.forEach((id) => (owned[id] = { rank: 1, level: 1, xp: 0 }));
   return {
     coins: 300,
     owned,
@@ -37,6 +37,9 @@ const Meta = {
 
   isOwned(id) { return !!this.data.owned[id]; },
   rankOf(id) { return this.data.owned[id] ? this.data.owned[id].rank : 0; },
+  // レベルは戦闘中だけのLv1-3(タワーの一時強化)とは別物の永続値。コイン購入・試合終了時のXPで上昇
+  levelOf(id) { return this.data.owned[id] ? (this.data.owned[id].level || 1) : 0; },
+  xpOf(id) { return this.data.owned[id] ? (this.data.owned[id].xp || 0) : 0; },
 
   isStageUnlocked(stageId) {
     if (stageId === 0) return true;
@@ -71,7 +74,41 @@ const Meta = {
 
   // オンライン対戦へ送る自分の編成データ(通信用の軽量な形)
   buildLoadoutPayload() {
-    return this.getLoadout().map((id) => ({ id, rank: this.rankOf(id) }));
+    return this.getLoadout().map((id) => ({ id, rank: this.rankOf(id), level: this.levelOf(id) }));
+  },
+
+  // コインを使ってキャラのレベルを1上げる(永続、戦闘中だけのLv1-3とは無関係)
+  levelUpCost(id) {
+    if (!this.isOwned(id)) return null;
+    return levelUpCoinCost(this.levelOf(id));
+  },
+  levelUpWithCoins(id) {
+    const cost = this.levelUpCost(id);
+    if (cost === null) return false;
+    if (!this.spendCoins(cost)) return false;
+    this.data.owned[id].level = this.levelOf(id) + 1;
+    this.save();
+    return true;
+  },
+
+  // 試合終了時、編成した各キャラに経験値を付与し、閾値を超えたぶんだけ自動でレベルアップさせる
+  grantMatchXp(charIds, amount) {
+    let changed = false;
+    (charIds || []).forEach((id) => {
+      const o = this.data.owned[id];
+      if (!o) return;
+      if (o.level === undefined) o.level = 1;
+      if (o.xp === undefined) o.xp = 0;
+      if (o.level >= MAX_LEVEL) return;
+      o.xp += amount;
+      changed = true;
+      while (o.level < MAX_LEVEL && o.xp >= xpToNextLevel(o.level)) {
+        o.xp -= xpToNextLevel(o.level);
+        o.level++;
+      }
+      if (o.level >= MAX_LEVEL) o.xp = 0;
+    });
+    if (changed) this.save();
   },
 
   // ガチャ1回分。結果 { id, isNew, rank, pityUsed, refund }
@@ -84,7 +121,7 @@ const Meta = {
     const owned = this.data.owned[id];
     let isNew = false, refund = 0, rank;
     if (!owned) {
-      this.data.owned[id] = { rank: 1 };
+      this.data.owned[id] = { rank: 1, level: 1, xp: 0 };
       isNew = true; rank = 1;
     } else if (owned.rank >= MAX_RANK) {
       refund = 40; this.addCoins(refund); rank = owned.rank;
@@ -180,9 +217,9 @@ const Meta = {
   },
 };
 
-// 通信で受け取った相手の編成データ([{id,rank}]) から、TowerClashSimに渡せるcharDefsマップを作る
+// 通信で受け取った相手の編成データ([{id,rank,level}]) から、TowerClashSimに渡せるcharDefsマップを作る
 function defsFromLoadoutPayload(list) {
   const out = {};
-  (list || []).forEach(({ id, rank }) => { out[id] = effectiveCharDef(id, rank); });
+  (list || []).forEach(({ id, rank, level }) => { out[id] = effectiveCharDef(id, rank, level); });
   return out;
 }
