@@ -13,11 +13,14 @@ function buildPathData(cells) {
   return { points, segLens, totalLen, cellSet, cells };
 }
 
+const BOSS_RUSH_COUNT = 5;
+
 class CampaignSim {
-  constructor(stage, diffKey, equippedDefs) {
+  constructor(stage, diffKey, equippedDefs, mode) {
     this.stage = stage;
     this.diff = DIFFICULTIES[diffKey];
     this.diffKey = diffKey;
+    this.mode = mode || "normal"; // 'normal' | 'endless' | 'bossrush'
     this.path = buildPathData(stage.path);
     this.charDefs = equippedDefs; // { charId: effectiveDef(ランク反映済) }
 
@@ -119,6 +122,16 @@ class CampaignSim {
     return true;
   }
 
+  // モードに応じたウェーブ生成(討伐戦はボス1体だけ、エンドレスは通常のbuildWaveをwaveIndexの上限なく使い回す)
+  _buildWaveForMode() {
+    if (this.mode === "bossrush") {
+      const mul = this.stage.baseMul * this.diff.hpMul * (1 + 0.2 * this.waveIndex);
+      const spdMul = this.diff.spdMul * (1 + 0.03 * this.waveIndex);
+      return [{ type: "boss", hpMul: mul, spdMul, interval: 1 }];
+    }
+    return buildWave(this.stage, this.diff, this.waveIndex);
+  }
+
   _spawnEnemy(entry) {
     const md = MONSTER_DEFS[entry.type];
     this.enemies.push({
@@ -140,7 +153,7 @@ class CampaignSim {
       this.prepTimer -= dt;
       if (this.prepTimer <= 0) {
         this.waveIndex++;
-        this.spawnQueue = buildWave(this.stage, this.diff, this.waveIndex);
+        this.spawnQueue = this._buildWaveForMode();
         this.spawnTimer = 0;
         this.waveState = "spawning";
         this.events.push({ k: "waveStart", wave: this.waveIndex + 1 });
@@ -157,7 +170,10 @@ class CampaignSim {
       if (this.enemies.length === 0) {
         this.wavesCleared = this.waveIndex + 1;
         this.events.push({ k: "waveClear", wave: this.wavesCleared });
-        if (this.waveIndex >= this.stage.waveCount - 1) {
+        const isFinalWave = this.mode === "normal" ? this.waveIndex >= this.stage.waveCount - 1
+          : this.mode === "bossrush" ? this.waveIndex >= BOSS_RUSH_COUNT - 1
+          : false; // endlessは倒れるまで終わらない
+        if (isFinalWave) {
           this.over = true; this.victory = true; this.reason = "cleared";
         } else {
           this.waveState = "prep"; this.prepTimer = 6;

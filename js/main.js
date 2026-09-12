@@ -61,6 +61,13 @@ function updateSpeedButtons() {
 $("btn-help").onclick = () => showScreen("s-help");
 $("btn-help-back").onclick = () => showScreen("s-title");
 
+// ===== 効果音のON/OFF =====
+function updateSfxToggleBtn() {
+  $("btn-sfx-toggle").textContent = isSfxMuted() ? "🔇 効果音:OFF" : "🔊 効果音:ON";
+}
+$("btn-sfx-toggle").onclick = () => { setSfxMuted(!isSfxMuted()); updateSfxToggleBtn(); };
+updateSfxToggleBtn();
+
 // ===== オンライン対戦セットアップ(ホーム画面のサブ要素) =====
 $("tab-create").onclick = () => switchOnlineTab("create");
 $("tab-join").onclick = () => switchOnlineTab("join");
@@ -249,7 +256,7 @@ function buildShopRow() {
     $("hud-resource-label").textContent = "💰ゴールド";
     const loadout = Meta.getLoadout();
     G.localCharDefs = {};
-    loadout.forEach((id) => { G.localCharDefs[id] = effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id)); });
+    loadout.forEach((id) => { G.localCharDefs[id] = applyEquipBonus(effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id)), Meta.equippedOf(id)); });
     loadout.forEach((id) => {
       const def = G.localCharDefs[id];
       const b = document.createElement("button");

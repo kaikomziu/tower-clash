@@ -3,10 +3,32 @@
 
 function updateCoinDisplays() {
   const v = Meta.data.coins;
-  ["camp-coin-val", "stages-coin-val", "roster-coin-val", "gacha-coin-val", "bonus-coin-val", "missions-coin-val", "dailystage-coin-val"].forEach((id) => {
+  ["camp-coin-val", "stages-coin-val", "roster-coin-val", "gacha-coin-val", "bonus-coin-val", "missions-coin-val", "dailystage-coin-val", "ach-coin-val"].forEach((id) => {
     const el = $(id);
     if (el) el.textContent = v;
   });
+  updatePlayerLevelDisplay();
+}
+
+// ===== 指揮官レベル =====
+function updatePlayerLevelDisplay() {
+  const textEl = $("player-level-text"), barEl = $("player-xp-bar");
+  if (!textEl) return;
+  const lv = Meta.data.playerLevel || 1;
+  const title = Meta.getTitleText();
+  textEl.textContent = "🎖️ Lv." + lv + (title !== "指揮官" ? " ・" + title : "");
+  const need = playerXpToNext(lv);
+  const pct = Math.min(100, Math.round(((Meta.data.playerXp || 0) / need) * 100));
+  barEl.style.width = pct + "%";
+}
+function showPlayerLevelToast(level) {
+  const container = $("achievement-toast-container");
+  const el = document.createElement("div");
+  el.className = "ach-toast";
+  el.innerHTML = `<span class="at-emoji">🎖️</span><div><div class="at-title">レベルアップ!</div><div class="at-name">指揮官 Lv.${level}</div></div>`;
+  container.appendChild(el);
+  setTimeout(() => el.classList.add("show"), 30);
+  setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 3200);
 }
 
 // ===== タイトル→キャンペーンホーム =====
@@ -99,9 +121,40 @@ function formatCharStats(effDef) {
   return lines;
 }
 
+function renderPresetRow() {
+  const row = $("preset-row");
+  row.innerHTML = "";
+  const presets = Meta.data.presets || [null, null, null];
+  presets.forEach((preset, i) => {
+    const item = document.createElement("div");
+    item.className = "preset-item" + (preset ? " filled" : "");
+    const label = document.createElement("span");
+    label.className = "preset-label";
+    label.textContent = preset ? `📋編成${i + 1} (${preset.filter((id) => Meta.isOwned(id)).length}体)` : `空きスロット${i + 1}`;
+    item.appendChild(label);
+    if (preset) {
+      item.onclick = () => {
+        const ids = Meta.loadPresetIds(i);
+        if (ids && ids.length) { Meta.setLoadout(ids); renderRoster(); }
+      };
+    }
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "preset-save-btn";
+    saveBtn.textContent = "💾保存";
+    saveBtn.onclick = (e) => {
+      e.stopPropagation();
+      Meta.savePreset(i, Meta.getLoadout());
+      renderPresetRow();
+    };
+    item.appendChild(saveBtn);
+    row.appendChild(item);
+  });
+}
+
 function renderRoster() {
   updateCoinDisplays();
   updatePowerDisplays();
+  renderPresetRow();
   const grid = $("char-grid");
   grid.innerHTML = "";
   const loadout = Meta.getLoadout();
@@ -110,7 +163,8 @@ function renderRoster() {
     const owned = Meta.isOwned(id);
     const rank = Meta.rankOf(id);
     const level = Meta.levelOf(id);
-    const effDef = owned ? effectiveCharDef(id, rank, level) : null;
+    const equippedItemId = owned ? Meta.equippedOf(id) : null;
+    const effDef = owned ? applyEquipBonus(effectiveCharDef(id, rank, level), equippedItemId) : null;
     const inLoadout = loadout.includes(id);
     // レベルアップボタンを内包するためbutton要素ではなくdivを使う(button内button回避)
     const card = document.createElement("div");
@@ -135,6 +189,8 @@ function renderRoster() {
         Meta.setLoadout(cur);
         renderRoster();
       };
+      const btnRow = document.createElement("div");
+      btnRow.className = "char-btn-row";
       const cost = Meta.levelUpCost(id);
       const lvBtn = document.createElement("button");
       lvBtn.className = "char-lvup-btn";
@@ -144,11 +200,52 @@ function renderRoster() {
         e.stopPropagation(); // カード本体のクリック(編成選択)に伝播させない
         if (Meta.levelUpWithCoins(id)) { checkAndToastAchievements(); renderRoster(); }
       };
-      card.appendChild(lvBtn);
+      const equipBtn = document.createElement("button");
+      equipBtn.className = "char-lvup-btn";
+      const equippedDef = equipItemDef(equippedItemId);
+      equipBtn.textContent = equippedDef ? `${equippedDef.emoji}${equippedDef.name}` : "🎒未装備";
+      equipBtn.onclick = (e) => { e.stopPropagation(); openItemPicker(id); };
+      btnRow.appendChild(lvBtn);
+      btnRow.appendChild(equipBtn);
+      card.appendChild(btnRow);
     }
     grid.appendChild(card);
   });
 }
+
+// ===== 装備アイテムの選択(キャラ1体につき1個まで) =====
+function openItemPicker(charId) {
+  const list = $("item-picker-list");
+  list.innerHTML = "";
+  const noneBtn = document.createElement("button");
+  noneBtn.className = "btn ghost small";
+  noneBtn.textContent = "🚫 なし(外す)";
+  noneBtn.onclick = () => { Meta.unequipItem(charId); closeItemPicker(); renderRoster(); };
+  list.appendChild(noneBtn);
+  let anyOwned = false;
+  ALL_EQUIP_ITEM_IDS.forEach((itemId) => {
+    const count = Meta.itemCount(itemId);
+    if (count <= 0) return;
+    anyOwned = true;
+    const item = equipItemDef(itemId);
+    const btn = document.createElement("button");
+    btn.className = "btn small item-picker-btn";
+    btn.style.setProperty("--ic", item.color);
+    btn.textContent = `${item.emoji} ${item.name} ×${count}`;
+    btn.onclick = () => { Meta.equipItem(charId, itemId); closeItemPicker(); renderRoster(); };
+    list.appendChild(btn);
+  });
+  if (!anyOwned) {
+    const p = document.createElement("p");
+    p.className = "sub";
+    p.textContent = "所持しているアイテムがありません(ステージクリアで低確率でドロップ)";
+    list.appendChild(p);
+  }
+  $("item-picker-title").textContent = "🎒 " + CHAR_DEFS[charId].name + " の装備";
+  $("item-picker-overlay").hidden = false;
+}
+function closeItemPicker() { $("item-picker-overlay").hidden = true; }
+$("btn-item-picker-close").onclick = closeItemPicker;
 
 // ===== ガチャ =====
 $("btn-gacha-back").onclick = () => showScreen("s-camp-home");
@@ -171,6 +268,7 @@ function openGachaVeil(results) {
 }
 $("gacha-veil").onclick = () => {
   $("gacha-veil").hidden = true;
+  SFX.gacha();
   if (pendingGachaResults) { showGachaResults(pendingGachaResults); pendingGachaResults = null; }
 };
 function showGachaResults(results) {
@@ -216,8 +314,9 @@ const cCtx = cCanvas.getContext("2d");
 function startCampaignBattle(stage, diffKey, opts) {
   const loadout = Meta.getLoadout();
   const equippedDefs = {};
-  loadout.forEach((id) => { equippedDefs[id] = effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id)); });
-  CG.sim = new CampaignSim(stage, diffKey, equippedDefs);
+  loadout.forEach((id) => { equippedDefs[id] = applyEquipBonus(effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id)), Meta.equippedOf(id)); });
+  const mode = (opts && opts.mode) || "normal";
+  CG.sim = new CampaignSim(stage, diffKey, equippedDefs, mode);
   CG.stage = stage; CG.diffKey = diffKey;
   CG.isDaily = !!(opts && opts.isDaily);
   CG.resultShown = false;
@@ -273,7 +372,7 @@ cCanvas.addEventListener("click", (e) => {
   if (CG.placingChar) {
     const col = Math.floor(x / CCELL), row = Math.floor(y / CCELL);
     if (col >= 0 && row >= 0 && col < CCOLS && row < CROWS) {
-      if (CG.sim.applyPlaceTower(col, row, CG.placingChar)) { Meta.trackMission("placeTower", 1); Meta.trackStat("towersPlaced", 1); }
+      if (CG.sim.applyPlaceTower(col, row, CG.placingChar)) { Meta.trackMission("placeTower", 1); Meta.trackStat("towersPlaced", 1); SFX.place(); }
     }
     CG.placingChar = null;
     document.querySelectorAll("#camp-shop-row .shop-btn").forEach((b) => b.classList.remove("sel"));
@@ -293,8 +392,8 @@ function openCampSellPanel(t) {
   const levelCost = canLevel ? battleLevelUpCost(def.cost, t.level) : null;
   $("camp-sell-info").textContent = `${def.emoji}${def.name} Lv${t.level}` + (canLevel ? ` (強化:${levelCost}🪙)` : "(MAX)");
   $("btn-camp-levelup").disabled = !canLevel;
-  $("btn-camp-levelup").onclick = () => { CG.sim.applyLevelUp(t.id); openCampSellPanel(t); };
-  $("btn-camp-sell").onclick = () => { CG.sim.applySellTower(t.id); $("camp-sell-panel").hidden = true; };
+  $("btn-camp-levelup").onclick = () => { if (CG.sim.applyLevelUp(t.id)) SFX.levelup(); openCampSellPanel(t); };
+  $("btn-camp-sell").onclick = () => { CG.sim.applySellTower(t.id); SFX.sell(); $("camp-sell-panel").hidden = true; };
   $("camp-sell-panel").hidden = false;
 }
 $("btn-camp-sell-cancel").onclick = () => { $("camp-sell-panel").hidden = true; };
@@ -344,7 +443,7 @@ $("btn-pause-resume").onclick = () => {
 $("btn-pause-retry").onclick = () => {
   $("pause-overlay").hidden = true;
   CG.paused = false;
-  startCampaignBattle(CG.stage, CG.diffKey, { isDaily: CG.isDaily });
+  startCampaignBattle(CG.stage, CG.diffKey, { isDaily: CG.isDaily, mode: CG.sim.mode });
 };
 $("btn-pause-quit").onclick = () => {
   $("pause-overlay").hidden = true;
@@ -371,23 +470,31 @@ function campLoop(ts) {
     }
     if (CG.sim.over) CG.simAcc = 0;
     let killCount = 0, waveClearCount = 0;
+    let firedThisFrame = false, killedThisFrame = false;
     frameEvents.forEach((ev) => {
       if (ev.k === "kill") {
         killCount++;
+        killedThisFrame = true;
         CG.fx.killBursts.push({ x: ev.x || 0, y: ev.y || 0, t: 0, life: 0.35 });
       } else if (ev.k === "waveClear") {
         waveClearCount++;
+      } else if (ev.k === "waveStart") {
+        SFX.waveStart();
       } else if (ev.k === "hit") {
         const jitterX = (Math.random() - 0.5) * 14;
         CG.fx.damageTexts.push({ x: ev.x + jitterX, y: ev.y - 10, text: "-" + ev.amount, color: ev.crit ? "#fff" : ev.color, t: 0, life: 0.7, crit: !!ev.crit });
       } else if (ev.k === "fire") {
         CG.fx.towerFlash[ev.towerId] = 0.15;
+        firedThisFrame = true;
       } else if (ev.k === "nova") {
         CG.fx.novaFlash = 0.4; CG.fx.novaColor = ev.color;
       } else if (ev.k === "freeze") {
         CG.fx.freezeBursts.push({ x: ev.x, y: ev.y, t: 0, life: 0.4 });
       }
     });
+    // 高速ティック時に音が鳴りすぎないよう、1フレームにつき発射音/撃破音はそれぞれ1回だけ
+    if (firedThisFrame) SFX.fire();
+    if (killedThisFrame) SFX.kill();
     if (killCount) { Meta.trackMission("kill", killCount); Meta.trackStat("enemiesKilled", killCount); }
     if (waveClearCount) { Meta.trackMission("waveClear", waveClearCount); Meta.trackStat("wavesCleared", waveClearCount); }
 
@@ -535,6 +642,7 @@ function campUpdateHud(sim) {
 
 function showCampResult(sim) {
   const stage = CG.stage, diffKey = CG.diffKey, isDaily = CG.isDaily;
+  if (sim.victory) SFX.victory(); else SFX.defeat();
   let total = sim.wavesCleared * 5;
   let firstClear = false, dailyGranted = false, dailyReward = 0;
 
@@ -560,6 +668,13 @@ function showCampResult(sim) {
   Meta.grantMatchXp(Meta.getLoadout(), sim.victory ? MATCH_XP_WIN : MATCH_XP_LOSE);
   updateDailyBadges();
 
+  // 勝利時、低確率で装備アイテムがドロップ
+  let droppedItem = null;
+  if (sim.victory) {
+    const dropId = rollItemDrop();
+    if (dropId) { Meta.addItem(dropId, 1); droppedItem = equipItemDef(dropId); }
+  }
+
   $("camp-result-title").textContent = sim.victory ? "🎉 ステージクリア!" : "💥 敗北…";
   $("camp-result-detail").textContent = sim.victory
     ? `全${stage.waveCount}ウェーブを突破しました`
@@ -567,6 +682,7 @@ function showCampResult(sim) {
   let coinText = `🪙 +${total} コイン獲得`;
   if (firstClear) coinText += "(初クリアボーナス+50含む)";
   else if (isDaily && sim.victory) coinText += dailyGranted ? "(本日のデイリー報酬を含む)" : "(デイリー報酬は本日受け取り済み)";
+  if (droppedItem) coinText += ` / 🎁${droppedItem.emoji}${droppedItem.name}を入手!`;
   $("camp-coin-earn").textContent = coinText;
 
   const nextStage = !isDaily ? STAGES[stage.id + 1] : null;
@@ -606,6 +722,7 @@ function updatePowerDisplays() {
 
 // ===== 実績解除トースト =====
 function showAchievementToasts(list) {
+  if (list.length) SFX.achievement();
   const container = $("achievement-toast-container");
   list.forEach((a, i) => {
     const el = document.createElement("div");
@@ -623,6 +740,9 @@ function showAchievementToasts(list) {
 function checkAndToastAchievements() {
   const newly = Meta.checkAchievements();
   if (newly.length) showAchievementToasts(newly);
+  const levelUps = Meta.drainPendingLevelUps();
+  if (levelUps.length) { SFX.levelUpPlayer(); showPlayerLevelToast(levelUps[levelUps.length - 1]); }
+  updatePlayerLevelDisplay();
 }
 
 // ===== 実績画面 =====
@@ -636,6 +756,7 @@ function renderAchievementsScreen() {
   list.innerHTML = "";
   ACHIEVEMENTS.forEach((a) => {
     const unlocked = !!Meta.data.achievements[a.id];
+    const isEquipped = Meta.data.currentTitle === a.id;
     const card = document.createElement("div");
     card.className = "ach-card" + (unlocked ? " unlocked" : "");
     card.innerHTML = `
@@ -646,6 +767,17 @@ function renderAchievementsScreen() {
       </div>
       <div class="ach-reward">🪙${a.reward}</div>
     `;
+    if (unlocked) {
+      const titleBtn = document.createElement("button");
+      titleBtn.className = "btn small" + (isEquipped ? "" : " ghost");
+      titleBtn.textContent = isEquipped ? "称号:装備中" : "称号にする";
+      titleBtn.onclick = () => {
+        Meta.setTitle(isEquipped ? null : a.id);
+        renderAchievementsScreen();
+        updatePlayerLevelDisplay();
+      };
+      card.appendChild(titleBtn);
+    }
     list.appendChild(card);
   });
 }
@@ -678,7 +810,7 @@ function renderDailyBonusScreen() {
   $("btn-claim-bonus").textContent = d.bonusClaimed ? "受け取り済み" : "受け取る";
 }
 $("btn-claim-bonus").onclick = () => {
-  if (Meta.claimDailyBonus()) { checkAndToastAchievements(); renderDailyBonusScreen(); updateDailyBadges(); }
+  if (Meta.claimDailyBonus()) { SFX.coin(); checkAndToastAchievements(); renderDailyBonusScreen(); updateDailyBadges(); }
 };
 
 // ---- デイリーミッション ----

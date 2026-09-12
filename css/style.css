@@ -190,6 +190,9 @@ h2 { margin: 20px 0 6px; }
   border: 1px solid #3a6bff; background: #16213d; color: #7dd3fc; cursor: pointer;
 }
 .char-lvup-btn:disabled { opacity: 0.4; cursor: default; border-color: #35405c; color: #9fb0cc; }
+.char-btn-row { display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
+.item-picker-list { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; }
+.item-picker-btn { border-color: var(--ic, #35405c) !important; color: var(--ic, #e7edf7) !important; }
 
 /* ガチャ */
 .gacha-btns { display: flex; gap: 12px; margin-top: 10px; flex-wrap: wrap; justify-content: center; }
@@ -309,6 +312,12 @@ h2 { margin: 20px 0 6px; }
 }
 .power-display.small { font-size: 0.85rem; padding: 6px 14px; margin: 0 0 10px; }
 
+/* ===== 指揮官レベル ===== */
+.player-level-row { display: flex; align-items: center; gap: 10px; width: 100%; max-width: 340px; margin-top: 10px; }
+.player-level-text { font-size: 0.8rem; font-weight: 700; color: #7dd3fc; white-space: nowrap; }
+.player-xp-bar-wrap { flex: 1; height: 8px; background: #1b2745; border-radius: 5px; overflow: hidden; }
+.player-xp-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #7dd3fc, #3a6bff); transition: width 0.3s; }
+
 /* ===== 実績 ===== */
 .ach-list { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 600px; }
 .ach-card {
@@ -321,6 +330,21 @@ h2 { margin: 20px 0 6px; }
 .ach-name { font-weight: 700; }
 .ach-desc { font-size: 0.78rem; color: #9fb0cc; }
 .ach-reward { color: #facc15; font-weight: 700; font-size: 0.85rem; white-space: nowrap; }
+.ach-card .btn.small { flex-shrink: 0; white-space: nowrap; }
+
+/* ===== 編成プリセット ===== */
+.preset-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 620px; margin-bottom: 14px; }
+.preset-item {
+  flex: 1; min-width: 140px; background: #131c30; border: 2px solid #263252; border-radius: 12px; padding: 10px 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer;
+}
+.preset-item.filled { border-color: #3a6bff; cursor: pointer; }
+.preset-item:not(.filled) { cursor: default; opacity: 0.75; }
+.preset-label { font-size: 0.78rem; font-weight: 700; }
+.preset-save-btn {
+  font-size: 0.65rem; padding: 5px 8px; border-radius: 7px; border: 1px solid #35405c; background: #16213d;
+  color: #9fb0cc; cursor: pointer; flex-shrink: 0;
+}
 
 /* ===== 実績解除トースト ===== */
 #achievement-toast-container {

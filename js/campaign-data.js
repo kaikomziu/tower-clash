@@ -39,6 +39,11 @@ const STAGES = [
     baseMul: 2.15, waveCount: 13, baseCoin: 300,
     path: [[0,2],[1,2],[2,2],[2,3],[2,4],[2,5],[2,6],[3,6],[4,6],[5,6],[5,5],[5,4],[5,3],[5,2],[6,2],[7,2],[8,2],[8,3],[8,4],[8,5],[8,6],[9,6],[10,6],[11,6],[11,5],[11,4],[11,3],[11,2],[12,2],[13,2],[14,2],[15,2]],
   },
+  {
+    id: 5, name: "封印の玉座", emoji: "👑", desc: "隠しステージ。竜の巣窟を超える者だけが辿り着く最終試練",
+    baseMul: 2.6, waveCount: 15, baseCoin: 380,
+    path: [[0,4],[1,4],[2,4],[3,4],[3,5],[3,6],[3,7],[4,7],[5,7],[6,7],[6,6],[6,5],[6,4],[6,3],[6,2],[6,1],[7,1],[8,1],[9,1],[9,2],[9,3],[9,4],[9,5],[9,6],[9,7],[10,7],[11,7],[12,7],[12,6],[12,5],[12,4],[12,3],[12,2],[12,1],[13,1],[14,1],[15,1]],
+  },
 ];
 
 // ===== 敵モンスター(ウェーブで自動生成) =====
@@ -138,7 +143,7 @@ function charPower(effDef) {
   return Math.round(dps * mult * 12 + effDef.range * 0.6);
 }
 function totalPowerOf(charIds) {
-  return (charIds || []).reduce((sum, id) => sum + charPower(effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id))), 0);
+  return (charIds || []).reduce((sum, id) => sum + charPower(applyEquipBonus(effectiveCharDef(id, Meta.rankOf(id), Meta.levelOf(id)), Meta.equippedOf(id))), 0);
 }
 
 // ===== レベルアップ(コイン購入・永続) =====
@@ -152,6 +157,55 @@ function levelUpCoinCost(level) {
 const MATCH_XP_WIN = 8, MATCH_XP_LOSE = 3;
 const XP_BASE = 20, XP_PER_LEVEL = 10;
 function xpToNextLevel(level) { return XP_BASE + level * XP_PER_LEVEL; }
+
+// ===== 装備アイテム(ステージクリアでドロップ、ランク/レベルとは別枠の追加ステータス) =====
+const EQUIP_ITEM_TYPES = {
+  atk: { name: "攻撃の宝石", emoji: "💥", statKey: "dmg" },
+  range: { name: "射程の宝石", emoji: "🎯", statKey: "range" },
+  speed: { name: "速度の宝石", emoji: "⚡", statKey: "cooldown" }, // cooldownは減る方向に効く
+};
+const EQUIP_TIERS = {
+  bronze: { name: "ブロンズ", mult: 0.05, color: "#cd7f32" },
+  silver: { name: "シルバー", mult: 0.10, color: "#c0c0c0" },
+  gold: { name: "ゴールド", mult: 0.15, color: "#ffd700" },
+};
+function equipItemId(type, tier) { return type + "_" + tier; }
+function equipItemDef(itemId) {
+  if (!itemId) return null;
+  const [type, tier] = itemId.split("_");
+  const t = EQUIP_ITEM_TYPES[type], tr = EQUIP_TIERS[tier];
+  if (!t || !tr) return null;
+  return { id: itemId, type, tier, name: tr.name + t.name, emoji: t.emoji, statKey: t.statKey, mult: tr.mult, color: tr.color };
+}
+const ALL_EQUIP_ITEM_IDS = [];
+Object.keys(EQUIP_ITEM_TYPES).forEach((type) => Object.keys(EQUIP_TIERS).forEach((tier) => ALL_EQUIP_ITEM_IDS.push(equipItemId(type, tier))));
+
+// 実効ステータスに装備ボーナスを追加適用(effectiveCharDefの結果に対して使う)
+function applyEquipBonus(effDef, itemId) {
+  const item = equipItemDef(itemId);
+  if (!item) return effDef;
+  const out = Object.assign({}, effDef);
+  if (item.statKey === "dmg") out.dmg = effDef.dmg * (1 + item.mult);
+  else if (item.statKey === "range") out.range = effDef.range * (1 + item.mult);
+  else if (item.statKey === "cooldown") out.cooldown = Math.max(0.15, effDef.cooldown * (1 - item.mult));
+  return out;
+}
+// ステージクリア時のアイテムドロップ抽選(35%で1個、ティアはブロンズ寄りの重み付け)
+const ITEM_DROP_CHANCE = 0.35;
+function rollItemDrop() {
+  if (Math.random() > ITEM_DROP_CHANCE) return null;
+  const types = Object.keys(EQUIP_ITEM_TYPES);
+  const type = types[Math.floor(Math.random() * types.length)];
+  const r = Math.random();
+  const tier = r < 0.6 ? "bronze" : r < 0.9 ? "silver" : "gold";
+  return equipItemId(type, tier);
+}
+
+// ===== 指揮官レベル(コイン獲得のたびに経験値が入るアカウント全体のレベル) =====
+const PLAYER_XP_RATE = 0.2; // 獲得コインの20%が経験値になる
+const PLAYER_XP_BASE = 50, PLAYER_XP_PER_LEVEL = 25;
+function playerXpToNext(level) { return PLAYER_XP_BASE + level * PLAYER_XP_PER_LEVEL; }
+function playerLevelUpReward(level) { return 20 + level * 15; }
 
 // ===== 戦闘中レベルアップ(設置後、最大3レベルまで) =====
 const BATTLE_MAX_LEVEL = 3;

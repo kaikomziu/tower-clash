@@ -12,8 +12,13 @@ function metaDefault() {
     pity: 0,
     stageProgress: {}, // { [stageId]: { easy:true/false, normal:.., hard:.. } }
     loadout: STARTER_CHARS.slice(),
+    presets: [null, null, null], // 編成プリセット3枠、それぞれキャラID配列 or null
+    items: {}, // { itemId: 所持数 }
+    equipped: {}, // { charId: itemId }
     daily: null, // ensureDaily()で日付が変わるたびに生成し直す
     achievements: {}, // { [achievementId]: true }
+    currentTitle: null, // 装備中の称号(実績IDを流用。nullなら「指揮官」)
+    playerLevel: 1, playerXp: 0, // 指揮官レベル(コイン獲得のたびに経験値が入る)
     stats: { // 実績判定に使う累計スタッツ
       stagesCleared: 0, dailyStageClears: 0, gachaPulls: 0, towersPlaced: 0,
       enemiesKilled: 0, wavesCleared: 0, coinsEarnedTotal: 0, levelUpsBought: 0,
@@ -33,6 +38,8 @@ function metaLoad() {
       owned: Object.assign({}, def.owned, data.owned || {}),
       stats: Object.assign({}, def.stats, data.stats || {}),
       achievements: Object.assign({}, def.achievements, data.achievements || {}),
+      items: Object.assign({}, def.items, data.items || {}),
+      equipped: Object.assign({}, def.equipped, data.equipped || {}),
     });
   } catch (e) {
     return metaDefault();
@@ -69,12 +76,36 @@ const Meta = {
     return first;
   },
 
+  pendingLevelUps: [], // 表示待ちの指揮官レベルアップ通知(非永続、drainPendingLevelUpsで取り出す)
+
   addCoins(n) {
     const rounded = Math.round(n);
     this.data.coins = Math.max(0, this.data.coins + rounded);
-    if (rounded > 0) this.trackStat("coinsEarnedTotal", rounded);
+    if (rounded > 0) {
+      this.trackStat("coinsEarnedTotal", rounded);
+      this.grantPlayerXp(Math.round(rounded * PLAYER_XP_RATE));
+    }
     this.save();
   },
+  // 指揮官レベルの経験値付与。コイン加算のたびに自動で呼ばれる(addCoins自体は呼ばない: 無限ループ回避)
+  grantPlayerXp(amount) {
+    if (amount <= 0) return;
+    if (this.data.playerLevel === undefined) this.data.playerLevel = 1;
+    if (this.data.playerXp === undefined) this.data.playerXp = 0;
+    this.data.playerXp += amount;
+    while (this.data.playerXp >= playerXpToNext(this.data.playerLevel)) {
+      this.data.playerXp -= playerXpToNext(this.data.playerLevel);
+      this.data.playerLevel++;
+      this.data.coins += playerLevelUpReward(this.data.playerLevel);
+      this.pendingLevelUps.push(this.data.playerLevel);
+    }
+  },
+  drainPendingLevelUps() {
+    const list = this.pendingLevelUps;
+    this.pendingLevelUps = [];
+    return list;
+  },
+
   spendCoins(n) {
     if (this.data.coins < n) return false;
     this.data.coins -= n; this.save(); return true;
@@ -110,6 +141,19 @@ const Meta = {
     return { unlocked: Object.keys(this.data.achievements || {}).length, total: ACHIEVEMENT_TOTAL_COUNT };
   },
 
+  // ===== 称号(解除済み実績の名前を装備できる) =====
+  setTitle(achievementId) {
+    if (achievementId !== null && !this.data.achievements[achievementId]) return false;
+    this.data.currentTitle = achievementId;
+    this.save();
+    return true;
+  },
+  getTitleText() {
+    if (!this.data.currentTitle) return "指揮官";
+    const a = ACHIEVEMENTS.find((x) => x.id === this.data.currentTitle);
+    return a ? a.name : "指揮官";
+  },
+
   getLoadout() {
     const owned = Object.keys(this.data.owned);
     let lo = (this.data.loadout || []).filter((id) => owned.includes(id));
@@ -118,9 +162,49 @@ const Meta = {
   },
   setLoadout(ids) { this.data.loadout = ids.slice(0, MAX_LOADOUT); this.save(); },
 
+  // ===== 編成プリセット(3枠) =====
+  savePreset(slot, ids) {
+    if (!this.data.presets) this.data.presets = [null, null, null];
+    this.data.presets[slot] = ids.slice(0, MAX_LOADOUT);
+    this.save();
+  },
+  loadPresetIds(slot) {
+    const p = (this.data.presets || [])[slot];
+    if (!p) return null;
+    return p.filter((id) => this.isOwned(id));
+  },
+
+  // ===== 装備アイテム(ステージクリアでドロップ、キャラ1体につき1個まで装備) =====
+  addItem(itemId, count) {
+    if (!this.data.items) this.data.items = {};
+    this.data.items[itemId] = (this.data.items[itemId] || 0) + (count || 1);
+    this.save();
+  },
+  itemCount(itemId) { return (this.data.items && this.data.items[itemId]) || 0; },
+  equippedOf(charId) { return (this.data.equipped && this.data.equipped[charId]) || null; },
+  equipItem(charId, itemId) {
+    if (!this.isOwned(charId) || this.itemCount(itemId) <= 0) return false;
+    const prev = this.equippedOf(charId);
+    if (prev === itemId) return true;
+    if (prev) this.addItem(prev, 1); // 既存装備を在庫へ戻す
+    this.data.items[itemId] -= 1;
+    if (!this.data.equipped) this.data.equipped = {};
+    this.data.equipped[charId] = itemId;
+    this.save();
+    return true;
+  },
+  unequipItem(charId) {
+    const prev = this.equippedOf(charId);
+    if (!prev) return false;
+    this.addItem(prev, 1);
+    delete this.data.equipped[charId];
+    this.save();
+    return true;
+  },
+
   // オンライン対戦へ送る自分の編成データ(通信用の軽量な形)
   buildLoadoutPayload() {
-    return this.getLoadout().map((id) => ({ id, rank: this.rankOf(id), level: this.levelOf(id) }));
+    return this.getLoadout().map((id) => ({ id, rank: this.rankOf(id), level: this.levelOf(id), equip: this.equippedOf(id) }));
   },
 
   // コインを使ってキャラのレベルを1上げる(永続、戦闘中だけのLv1-3とは無関係)
@@ -271,6 +355,6 @@ const Meta = {
 // 通信で受け取った相手の編成データ([{id,rank,level}]) から、TowerClashSimに渡せるcharDefsマップを作る
 function defsFromLoadoutPayload(list) {
   const out = {};
-  (list || []).forEach(({ id, rank, level }) => { out[id] = effectiveCharDef(id, rank, level); });
+  (list || []).forEach(({ id, rank, level, equip }) => { out[id] = applyEquipBonus(effectiveCharDef(id, rank, level), equip); });
   return out;
 }
