@@ -23,7 +23,7 @@ function metaDefault() {
       stagesCleared: 0, dailyStageClears: 0, gachaPulls: 0, towersPlaced: 0,
       enemiesKilled: 0, wavesCleared: 0, coinsEarnedTotal: 0, levelUpsBought: 0,
       loginDays: 0, onlineWins: 0, dailyBonusClaims: 0, dailyMissionsClaimed: 0,
-      totalPowerPeak: 0,
+      totalPowerPeak: 0, endlessRuns: 0, endlessBestWave: 0, bossRushClears: 0,
     },
   };
 }
@@ -119,6 +119,10 @@ const Meta = {
   updatePowerPeak(current) {
     if (!this.data.stats) this.data.stats = metaDefault().stats;
     if (current > (this.data.stats.totalPowerPeak || 0)) { this.data.stats.totalPowerPeak = current; this.save(); }
+  },
+  updateEndlessBestWave(wave) {
+    if (!this.data.stats) this.data.stats = metaDefault().stats;
+    if (wave > (this.data.stats.endlessBestWave || 0)) { this.data.stats.endlessBestWave = wave; this.save(); }
   },
   // 未解除の実績のうち条件を満たしたものを解除し、報酬コインを付与。新規解除の配列を返す
   checkAchievements() {

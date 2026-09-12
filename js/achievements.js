@@ -62,6 +62,11 @@ const ACHIEVEMENTS = [
   // ----- 総合力 -----
   { id: "power_500", name: "頼れる編成", desc: "総合戦力が500に到達", emoji: "⚡", reward: 100, check: (s) => s.totalPowerPeak >= 500 },
   { id: "power_2000", name: "最強編成", desc: "総合戦力が2000に到達", emoji: "🔥", reward: 400, check: (s) => s.totalPowerPeak >= 2000 },
+
+  // ----- エンドレス/討伐戦 -----
+  { id: "endless_wave_10", name: "エンドレスの挑戦者", desc: "エンドレスモードで10ウェーブ生き延びる", emoji: "♾️", reward: 100, check: (s) => (s.endlessBestWave || 0) >= 10 },
+  { id: "endless_wave_30", name: "終わりなき守護者", desc: "エンドレスモードで30ウェーブ生き延びる", emoji: "🌌", reward: 350, check: (s) => (s.endlessBestWave || 0) >= 30 },
+  { id: "bossrush_clear_1", name: "討伐戦制覇", desc: "討伐戦(ボスラッシュ)を1回クリアする", emoji: "👹", reward: 200, check: (s) => (s.bossRushClears || 0) >= 1 },
 ];
 
 const ACHIEVEMENT_TOTAL_COUNT = ACHIEVEMENTS.length;

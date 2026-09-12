@@ -89,6 +89,14 @@ $("btn-stage-launch").onclick = () => {
   if (Meta.getLoadout().length === 0) { alert("キャラ編成で出撃するキャラを選んでください"); return; }
   startCampaignBattle(CG_selectedStage, CG_selectedDiff);
 };
+$("btn-stage-launch-endless").onclick = () => {
+  if (Meta.getLoadout().length === 0) { alert("キャラ編成で出撃するキャラを選んでください"); return; }
+  startCampaignBattle(CG_selectedStage, CG_selectedDiff, { mode: "endless" });
+};
+$("btn-stage-launch-bossrush").onclick = () => {
+  if (Meta.getLoadout().length === 0) { alert("キャラ編成で出撃するキャラを選んでください"); return; }
+  startCampaignBattle(CG_selectedStage, CG_selectedDiff, { mode: "bossrush" });
+};
 
 // ===== キャラ編成 =====
 let ROSTER_RETURN_SCREEN = "s-camp-home";
@@ -624,7 +632,13 @@ function campRenderAll(sim) {
 }
 
 function campUpdateHud(sim) {
-  $("camp-wave-tag").textContent = `Wave ${Math.min(sim.waveIndex + 1, sim.stage.waveCount)}/${sim.stage.waveCount}`;
+  if (sim.mode === "endless") {
+    $("camp-wave-tag").textContent = `♾️Wave ${sim.waveIndex + 1}`;
+  } else if (sim.mode === "bossrush") {
+    $("camp-wave-tag").textContent = `👹ボス ${Math.min(sim.waveIndex + 1, BOSS_RUSH_COUNT)}/${BOSS_RUSH_COUNT}`;
+  } else {
+    $("camp-wave-tag").textContent = `Wave ${Math.min(sim.waveIndex + 1, sim.stage.waveCount)}/${sim.stage.waveCount}`;
+  }
   const hpPct = Math.max(0, (sim.hp / sim.hpMax) * 100);
   $("camp-hp-fill").style.width = hpPct + "%";
   $("camp-hp-text").textContent = Math.max(0, Math.round(sim.hp));
@@ -641,26 +655,43 @@ function campUpdateHud(sim) {
 }
 
 function showCampResult(sim) {
-  const stage = CG.stage, diffKey = CG.diffKey, isDaily = CG.isDaily;
+  const stage = CG.stage, diffKey = CG.diffKey, isDaily = CG.isDaily, mode = sim.mode || "normal";
   if (sim.victory) SFX.victory(); else SFX.defeat();
-  let total = sim.wavesCleared * 5;
-  let firstClear = false, dailyGranted = false, dailyReward = 0;
+  let total = 0;
+  let firstClear = false, dailyGranted = false, dailyReward = 0, bossRushCleared = false;
 
-  if (sim.victory) {
-    Meta.trackMission("stageClear", 1);
-    if (diffKey === "hard") Meta.trackMission("hardClear", 1);
-    Meta.trackStat("stagesCleared", 1);
+  if (mode === "endless") {
+    // エンドレスモード: 生き延びたウェーブ数に応じてコイン(コインも報酬に含む)
+    total = sim.wavesCleared * 8 + Math.floor(sim.wavesCleared / 10) * 100;
+    Meta.trackStat("endlessRuns", 1);
+    Meta.updateEndlessBestWave(sim.wavesCleared);
+  } else if (mode === "bossrush") {
+    // 討伐戦(ボスラッシュ): 全ボス撃破で固定報酬、途中撤退でも撃破数に応じた報酬
+    const diff = DIFFICULTIES[diffKey];
+    total = sim.wavesCleared * 40;
+    if (sim.victory) {
+      bossRushCleared = true;
+      total += Math.round(300 * diff.coinMul);
+      Meta.trackStat("bossRushClears", 1);
+    }
+  } else {
+    total = sim.wavesCleared * 5;
+    if (sim.victory) {
+      Meta.trackMission("stageClear", 1);
+      if (diffKey === "hard") Meta.trackMission("hardClear", 1);
+      Meta.trackStat("stagesCleared", 1);
 
-    if (isDaily) {
-      Meta.trackStat("dailyStageClears", 1);
-      dailyReward = Math.round(stage.baseCoin * 2.5);
-      dailyGranted = Meta.claimDailyStageReward();
-      if (dailyGranted) total += dailyReward;
-    } else {
-      const diff = DIFFICULTIES[diffKey];
-      total += Math.round(stage.baseCoin * diff.coinMul);
-      firstClear = Meta.markCleared(stage.id, diffKey);
-      if (firstClear) total += 50;
+      if (isDaily) {
+        Meta.trackStat("dailyStageClears", 1);
+        dailyReward = Math.round(stage.baseCoin * 2.5);
+        dailyGranted = Meta.claimDailyStageReward();
+        if (dailyGranted) total += dailyReward;
+      } else {
+        const diff = DIFFICULTIES[diffKey];
+        total += Math.round(stage.baseCoin * diff.coinMul);
+        firstClear = Meta.markCleared(stage.id, diffKey);
+        if (firstClear) total += 50;
+      }
     }
   }
   Meta.addCoins(total);
@@ -668,27 +699,35 @@ function showCampResult(sim) {
   Meta.grantMatchXp(Meta.getLoadout(), sim.victory ? MATCH_XP_WIN : MATCH_XP_LOSE);
   updateDailyBadges();
 
-  // 勝利時、低確率で装備アイテムがドロップ
+  // 勝利時、低確率で装備アイテムがドロップ(エンドレス/討伐戦でも対象)
   let droppedItem = null;
-  if (sim.victory) {
+  if (sim.victory || mode === "endless") {
     const dropId = rollItemDrop();
     if (dropId) { Meta.addItem(dropId, 1); droppedItem = equipItemDef(dropId); }
   }
 
-  $("camp-result-title").textContent = sim.victory ? "🎉 ステージクリア!" : "💥 敗北…";
-  $("camp-result-detail").textContent = sim.victory
-    ? `全${stage.waveCount}ウェーブを突破しました`
-    : `Wave ${sim.wavesCleared}/${stage.waveCount}まで到達`;
+  if (mode === "endless") {
+    $("camp-result-title").textContent = "💥 力尽きた…";
+    $("camp-result-detail").textContent = `${sim.wavesCleared}ウェーブ生き延びた(自己ベスト: ${Meta.data.stats.endlessBestWave || 0}ウェーブ)`;
+  } else if (mode === "bossrush") {
+    $("camp-result-title").textContent = bossRushCleared ? "🎉 討伐戦クリア!" : "💥 討伐失敗…";
+    $("camp-result-detail").textContent = `ボス ${sim.wavesCleared}/${BOSS_RUSH_COUNT} 体を撃破`;
+  } else {
+    $("camp-result-title").textContent = sim.victory ? "🎉 ステージクリア!" : "💥 敗北…";
+    $("camp-result-detail").textContent = sim.victory
+      ? `全${stage.waveCount}ウェーブを突破しました`
+      : `Wave ${sim.wavesCleared}/${stage.waveCount}まで到達`;
+  }
   let coinText = `🪙 +${total} コイン獲得`;
   if (firstClear) coinText += "(初クリアボーナス+50含む)";
   else if (isDaily && sim.victory) coinText += dailyGranted ? "(本日のデイリー報酬を含む)" : "(デイリー報酬は本日受け取り済み)";
   if (droppedItem) coinText += ` / 🎁${droppedItem.emoji}${droppedItem.name}を入手!`;
   $("camp-coin-earn").textContent = coinText;
 
-  const nextStage = !isDaily ? STAGES[stage.id + 1] : null;
+  const nextStage = (mode === "normal" && !isDaily) ? STAGES[stage.id + 1] : null;
   $("btn-camp-next").hidden = !(sim.victory && nextStage);
   if (sim.victory && nextStage) $("btn-camp-next").onclick = () => startCampaignBattle(nextStage, diffKey);
-  $("btn-camp-retry").onclick = () => startCampaignBattle(stage, diffKey, { isDaily });
+  $("btn-camp-retry").onclick = () => startCampaignBattle(stage, diffKey, { isDaily, mode });
   $("btn-camp-result-back").textContent = isDaily ? "デイリーへ戻る" : "ステージ選択に戻る";
   $("btn-camp-result-back").onclick = () => {
     CG.sim = null;
