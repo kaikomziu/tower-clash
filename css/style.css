@@ -197,6 +197,11 @@ h2 { margin: 20px 0 6px; }
 
 /* バトル(キャンペーン) */
 .wave-tag { background: #1b2745; padding: 3px 12px; border-radius: 10px; font-weight: 700; }
+.autoskip-btn {
+  background: #1b2745; border: 1px solid #35405c; color: #9fb0cc; padding: 3px 10px;
+  border-radius: 10px; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+}
+.autoskip-btn.on { background: #22c55e; border-color: #22c55e; color: #06280f; }
 .camp-prep { gap: 8px; margin-left: auto; }
 #camp-prep-text { font-size: 0.85rem; color: #facc15; }
 

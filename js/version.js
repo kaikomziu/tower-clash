@@ -1,6 +1,13 @@
 // ===== 更新履歴 =====
-const TOWERCLASH_VERSION = "2.1.0";
+const TOWERCLASH_VERSION = "2.2.0";
 const CHANGELOG = [
+  {
+    version: "2.2.0",
+    date: "2026-09-12",
+    notes: [
+      "バトル画面に「🔁自動スキップ」トグルを追加。ONにするとウェーブ間の準備時間を待たずに次々と進行する。設定は端末に保存され次回以降も引き継がれる",
+    ],
+  },
   {
     version: "2.1.0",
     date: "2026-09-12",

@@ -158,6 +158,7 @@ function startCampaignBattle(stage, diffKey) {
   $("camp-sell-panel").hidden = true;
   $("camp-place-hint").hidden = true;
   buildCampShopRow(loadout);
+  updateAutoSkipBtn();
   showScreen("s-camp-battle");
   CG.simAcc = 0; CG.lastTs = performance.now();
   if (!CG.rafId) CG.rafId = requestAnimationFrame(campLoop);
@@ -226,12 +227,28 @@ function openCampSellPanel(t) {
 }
 $("btn-camp-sell-cancel").onclick = () => { $("camp-sell-panel").hidden = true; };
 $("btn-camp-skip").onclick = () => { if (CG.sim) CG.sim.applySkipPrep(); };
+
+// ===== 自動スキップ(ウェーブ間の準備時間を自動で飛ばす。設定はlocalStorageに保存) =====
+let campAutoSkip = localStorage.getItem("towerclash_autoskip") === "1";
+function updateAutoSkipBtn() {
+  const b = $("btn-camp-autoskip");
+  b.textContent = "🔁自動スキップ:" + (campAutoSkip ? "ON" : "OFF");
+  b.classList.toggle("on", campAutoSkip);
+}
+$("btn-camp-autoskip").onclick = () => {
+  campAutoSkip = !campAutoSkip;
+  try { localStorage.setItem("towerclash_autoskip", campAutoSkip ? "1" : "0"); } catch (e) { /* ignore */ }
+  updateAutoSkipBtn();
+  if (campAutoSkip && CG.sim && CG.sim.waveState === "prep") CG.sim.applySkipPrep();
+};
+updateAutoSkipBtn();
 $("btn-camp-quit").onclick = () => { CG.sim = null; showScreen("s-camp-home"); updateCoinDisplays(); };
 
 function campLoop(ts) {
   const frameDt = Math.min(1.5, Math.max(0, (ts - CG.lastTs) / 1000));
   CG.lastTs = ts;
   if (CG.sim) {
+    if (campAutoSkip && CG.sim.waveState === "prep") CG.sim.applySkipPrep();
     CG.simAcc += frameDt;
     let steps = 0;
     while (CG.simAcc >= CFIXED_DT && steps < CMAX_STEPS && !CG.sim.over) {
