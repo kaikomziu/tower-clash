@@ -149,6 +149,7 @@ class CampaignSim {
     } else if (this.waveState === "combat") {
       if (this.enemies.length === 0) {
         this.wavesCleared = this.waveIndex + 1;
+        this.events.push({ k: "waveClear", wave: this.wavesCleared });
         if (this.waveIndex >= this.stage.waveCount - 1) {
           this.over = true; this.victory = true; this.reason = "cleared";
         } else {

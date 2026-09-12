@@ -95,6 +95,7 @@ $("btn-online-back").onclick = () => {
   if (G.online) { G.online.leave(); G.online = null; }
   showScreen("s-camp-home");
   updateCoinDisplays();
+  updateDailyBadges();
 };
 
 // ホストは「自分が防衛側→自分の編成」「相手が防衛側→相手から届く編成」が揃うまで待って対戦開始する
@@ -478,4 +479,5 @@ function endToHome() {
   G.sim = null;
   showScreen("s-camp-home");
   updateCoinDisplays();
+  updateDailyBadges();
 }

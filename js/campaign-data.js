@@ -8,6 +8,8 @@ const DIFFICULTIES = {
   easy: { key: "easy", name: "EASY", label: "かんたん", hpMul: 0.72, spdMul: 0.92, countMul: 0.75, coinMul: 1.0, color: "#4ade80" },
   normal: { key: "normal", name: "NORMAL", label: "ふつう", hpMul: 1.0, spdMul: 1.0, countMul: 1.0, coinMul: 1.5, color: "#facc15" },
   hard: { key: "hard", name: "HARD", label: "むずかしい", hpMul: 1.55, spdMul: 1.12, countMul: 1.3, coinMul: 2.2, color: "#f87171" },
+  // デイリーステージ専用。通常の難易度選択には出さない(renderDiffPickで除外)
+  daily: { key: "daily", name: "DAILY", label: "デイリー", hpMul: 1.3, spdMul: 1.05, countMul: 1.15, coinMul: 1.0, color: "#38bdf8" },
 };
 
 // ===== ステージ(全5種、それぞれ固有の通り道) =====
@@ -141,4 +143,40 @@ function buildWave(stage, diff, waveIndex) {
   }
   if (isBoss) entries.push({ type: "boss", hpMul: mul * 0.9, spdMul, interval: 0.9 });
   return entries;
+}
+
+// ===== 日付ユーティリティ =====
+function todayStr() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+function daysBetween(a, b) {
+  return Math.round((new Date(b + "T00:00:00") - new Date(a + "T00:00:00")) / 86400000);
+}
+function dayIndexToday() {
+  return Math.floor(new Date(todayStr() + "T00:00:00").getTime() / 86400000);
+}
+
+// ===== デイリーボーナス(7日サイクル、連続受け取りで増額) =====
+const DAILY_BONUS_TABLE = [50, 70, 90, 120, 150, 200, 300];
+
+// ===== デイリーミッション(毎日3件をランダム抽選) =====
+const MISSION_POOL = [
+  { type: "placeTower", desc: (n) => `タワーを${n}体設置する`, targets: [5, 10, 15], reward: (n) => 30 + n * 4 },
+  { type: "kill", desc: (n) => `敵を${n}体撃破する`, targets: [20, 40, 80], reward: (n) => 30 + Math.round(n * 1.5) },
+  { type: "waveClear", desc: (n) => `ウェーブを${n}回クリアする`, targets: [5, 10, 20], reward: (n) => 40 + n * 3 },
+  { type: "stageClear", desc: (n) => `ステージを${n}回クリアする`, targets: [1, 2, 3], reward: (n) => 60 + n * 40 },
+  { type: "gacha", desc: (n) => `ガチャを${n}回引く`, targets: [1, 3, 5], reward: (n) => 50 + n * 20 },
+  { type: "hardClear", desc: () => "むずかしい難易度でステージをクリアする", targets: [1], reward: () => 150 },
+];
+function generateDailyMissions() {
+  const pool = MISSION_POOL.slice();
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 3).map((m) => {
+    const target = m.targets[Math.floor(Math.random() * m.targets.length)];
+    return { type: m.type, target, progress: 0, reward: m.reward(target), claimed: false, desc: m.desc(target) };
+  });
 }

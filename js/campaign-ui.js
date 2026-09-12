@@ -3,14 +3,14 @@
 
 function updateCoinDisplays() {
   const v = Meta.data.coins;
-  ["camp-coin-val", "stages-coin-val", "roster-coin-val", "gacha-coin-val"].forEach((id) => {
+  ["camp-coin-val", "stages-coin-val", "roster-coin-val", "gacha-coin-val", "bonus-coin-val", "missions-coin-val", "dailystage-coin-val"].forEach((id) => {
     const el = $(id);
     if (el) el.textContent = v;
   });
 }
 
 // ===== タイトル→キャンペーンホーム =====
-$("btn-campaign").onclick = () => { updateCoinDisplays(); showScreen("s-camp-home"); };
+$("btn-campaign").onclick = () => { updateCoinDisplays(); updateDailyBadges(); showScreen("s-camp-home"); };
 $("btn-camp-home-back").onclick = () => showScreen("s-title");
 $("btn-camp-stages").onclick = () => { renderStageGrid(); $("stage-detail").hidden = true; showScreen("s-camp-stages"); };
 $("btn-camp-roster").onclick = () => { renderRoster(); showScreen("s-camp-roster"); };
@@ -52,7 +52,7 @@ function openStageDetail(st) {
 function renderDiffPick() {
   const wrap = $("diff-pick");
   wrap.innerHTML = "";
-  Object.values(DIFFICULTIES).forEach((d) => {
+  Object.values(DIFFICULTIES).filter((d) => d.key !== "daily").forEach((d) => {
     const b = document.createElement("button");
     b.className = "diff-btn" + (d.key === CG_selectedDiff ? " sel" : "");
     b.style.setProperty("--dc", d.color);
@@ -147,12 +147,13 @@ let campHoverXY = null;
 const cCanvas = $("c-board");
 const cCtx = cCanvas.getContext("2d");
 
-function startCampaignBattle(stage, diffKey) {
+function startCampaignBattle(stage, diffKey, opts) {
   const loadout = Meta.getLoadout();
   const equippedDefs = {};
   loadout.forEach((id) => { equippedDefs[id] = effectiveCharDef(id, Meta.rankOf(id)); });
   CG.sim = new CampaignSim(stage, diffKey, equippedDefs);
   CG.stage = stage; CG.diffKey = diffKey;
+  CG.isDaily = !!(opts && opts.isDaily);
   CG.resultShown = false;
   CG.placingChar = null;
   $("camp-sell-panel").hidden = true;
@@ -202,7 +203,9 @@ cCanvas.addEventListener("click", (e) => {
   const { x, y } = getCBoardXY(e);
   if (CG.placingChar) {
     const col = Math.floor(x / CCELL), row = Math.floor(y / CCELL);
-    if (col >= 0 && row >= 0 && col < CCOLS && row < CROWS) CG.sim.applyPlaceTower(col, row, CG.placingChar);
+    if (col >= 0 && row >= 0 && col < CCOLS && row < CROWS) {
+      if (CG.sim.applyPlaceTower(col, row, CG.placingChar)) Meta.trackMission("placeTower", 1);
+    }
     CG.placingChar = null;
     document.querySelectorAll("#camp-shop-row .shop-btn").forEach((b) => b.classList.remove("sel"));
     $("camp-place-hint").hidden = true;
@@ -251,12 +254,21 @@ function campLoop(ts) {
     if (campAutoSkip && CG.sim.waveState === "prep") CG.sim.applySkipPrep();
     CG.simAcc += frameDt;
     let steps = 0;
+    const frameEvents = [];
     while (CG.simAcc >= CFIXED_DT && steps < CMAX_STEPS && !CG.sim.over) {
       CG.sim.tick(CFIXED_DT);
+      frameEvents.push(...CG.sim.events); // tick()は毎回events配列を作り直すので、フレーム内は蓄積しておく
       CG.simAcc -= CFIXED_DT;
       steps++;
     }
     if (CG.sim.over) CG.simAcc = 0;
+    let killCount = 0, waveClearCount = 0;
+    frameEvents.forEach((ev) => {
+      if (ev.k === "kill") killCount++;
+      else if (ev.k === "waveClear") waveClearCount++;
+    });
+    if (killCount) Meta.trackMission("kill", killCount);
+    if (waveClearCount) Meta.trackMission("waveClear", waveClearCount);
     campRenderAll(CG.sim);
     if (CG.sim.over && !CG.resultShown) {
       CG.resultShown = true;
@@ -339,27 +351,140 @@ function campUpdateHud(sim) {
 }
 
 function showCampResult(sim) {
-  const stage = CG.stage, diffKey = CG.diffKey, diff = DIFFICULTIES[diffKey];
+  const stage = CG.stage, diffKey = CG.diffKey, isDaily = CG.isDaily;
   let total = sim.wavesCleared * 5;
-  let firstClear = false;
+  let firstClear = false, dailyGranted = false, dailyReward = 0;
+
   if (sim.victory) {
-    total += Math.round(stage.baseCoin * diff.coinMul);
-    firstClear = Meta.markCleared(stage.id, diffKey);
-    if (firstClear) total += 50;
+    Meta.trackMission("stageClear", 1);
+    if (diffKey === "hard") Meta.trackMission("hardClear", 1);
+
+    if (isDaily) {
+      dailyReward = Math.round(stage.baseCoin * 2.5);
+      dailyGranted = Meta.claimDailyStageReward();
+      if (dailyGranted) total += dailyReward;
+    } else {
+      const diff = DIFFICULTIES[diffKey];
+      total += Math.round(stage.baseCoin * diff.coinMul);
+      firstClear = Meta.markCleared(stage.id, diffKey);
+      if (firstClear) total += 50;
+    }
   }
   Meta.addCoins(total);
+  updateDailyBadges();
 
   $("camp-result-title").textContent = sim.victory ? "🎉 ステージクリア!" : "💥 敗北…";
   $("camp-result-detail").textContent = sim.victory
     ? `全${stage.waveCount}ウェーブを突破しました`
     : `Wave ${sim.wavesCleared}/${stage.waveCount}まで到達`;
-  $("camp-coin-earn").textContent = `🪙 +${total} コイン獲得` + (firstClear ? "(初クリアボーナス+50含む)" : "");
+  let coinText = `🪙 +${total} コイン獲得`;
+  if (firstClear) coinText += "(初クリアボーナス+50含む)";
+  else if (isDaily && sim.victory) coinText += dailyGranted ? "(本日のデイリー報酬を含む)" : "(デイリー報酬は本日受け取り済み)";
+  $("camp-coin-earn").textContent = coinText;
 
-  const nextStage = STAGES[stage.id + 1];
+  const nextStage = !isDaily ? STAGES[stage.id + 1] : null;
   $("btn-camp-next").hidden = !(sim.victory && nextStage);
   if (sim.victory && nextStage) $("btn-camp-next").onclick = () => startCampaignBattle(nextStage, diffKey);
-  $("btn-camp-retry").onclick = () => startCampaignBattle(stage, diffKey);
-  $("btn-camp-result-back").onclick = () => { CG.sim = null; showScreen("s-camp-stages"); renderStageGrid(); };
+  $("btn-camp-retry").onclick = () => startCampaignBattle(stage, diffKey, { isDaily });
+  $("btn-camp-result-back").textContent = isDaily ? "デイリーへ戻る" : "ステージ選択に戻る";
+  $("btn-camp-result-back").onclick = () => {
+    CG.sim = null;
+    if (isDaily) { renderDailyStageScreen(); showScreen("s-daily-stage"); }
+    else { showScreen("s-camp-stages"); renderStageGrid(); }
+  };
 
   showScreen("s-camp-result");
 }
+
+// ===== デイリー要素(ボーナス/ミッション/ステージ) =====
+function updateDailyBadges() {
+  Meta.ensureDaily();
+  $("badge-bonus").hidden = Meta.data.daily.bonusClaimed;
+  $("badge-missions").hidden = !Meta.hasClaimableMission();
+  $("badge-dailystage").hidden = Meta.isDailyStageClearedToday();
+}
+
+// ---- デイリーボーナス ----
+$("btn-daily-bonus").onclick = () => { renderDailyBonusScreen(); showScreen("s-daily-bonus"); };
+$("btn-daily-bonus-back").onclick = () => { showScreen("s-camp-home"); updateCoinDisplays(); updateDailyBadges(); };
+function renderDailyBonusScreen() {
+  Meta.ensureDaily();
+  updateCoinDisplays();
+  const d = Meta.data.daily;
+  const nextDay = (d.bonusStreak % DAILY_BONUS_TABLE.length) + 1;
+  $("bonus-coin-val").textContent = Meta.data.coins;
+  $("bonus-streak-text").textContent = d.bonusClaimed
+    ? `Day${d.bonusStreak} 受け取り済み。また明日!`
+    : `Day${nextDay}の報酬を受け取れます`;
+  const cal = $("bonus-calendar");
+  cal.innerHTML = "";
+  DAILY_BONUS_TABLE.forEach((coin, i) => {
+    const dayNum = i + 1;
+    let state = "future";
+    if (dayNum < nextDay || (dayNum === nextDay && d.bonusClaimed)) state = "done";
+    else if (dayNum === nextDay) state = "today";
+    const cell = document.createElement("div");
+    cell.className = "bonus-day " + state;
+    cell.innerHTML = `<div class="bd-day">Day${dayNum}</div><div class="bd-coin">🪙${coin}</div>`;
+    cal.appendChild(cell);
+  });
+  $("btn-claim-bonus").disabled = d.bonusClaimed;
+  $("btn-claim-bonus").textContent = d.bonusClaimed ? "受け取り済み" : "受け取る";
+}
+$("btn-claim-bonus").onclick = () => {
+  if (Meta.claimDailyBonus()) { renderDailyBonusScreen(); updateDailyBadges(); }
+};
+
+// ---- デイリーミッション ----
+$("btn-daily-missions").onclick = () => { renderDailyMissionsScreen(); showScreen("s-daily-missions"); };
+$("btn-daily-missions-back").onclick = () => { showScreen("s-camp-home"); updateCoinDisplays(); updateDailyBadges(); };
+function renderDailyMissionsScreen() {
+  Meta.ensureDaily();
+  updateCoinDisplays();
+  const list = $("mission-list");
+  list.innerHTML = "";
+  Meta.data.daily.missions.forEach((m, idx) => {
+    const pct = Math.min(100, Math.round((m.progress / m.target) * 100));
+    const card = document.createElement("div");
+    card.className = "mission-card" + (m.claimed ? " claimed" : "");
+    card.innerHTML = `
+      <div class="mission-desc">${m.desc}</div>
+      <div class="mission-bar-wrap"><div class="mission-bar" style="width:${pct}%"></div></div>
+      <div class="mission-foot">
+        <span class="mission-progress">${m.progress}/${m.target}</span>
+        <span class="mission-reward">🪙${m.reward}</span>
+      </div>
+    `;
+    const btn = document.createElement("button");
+    const ready = !m.claimed && m.progress >= m.target;
+    btn.className = "btn small" + (ready ? "" : " ghost");
+    btn.textContent = m.claimed ? "受取済み" : (ready ? "受け取る" : "挑戦中");
+    btn.disabled = !ready;
+    btn.onclick = () => { Meta.claimMission(idx); renderDailyMissionsScreen(); updateDailyBadges(); };
+    card.appendChild(btn);
+    list.appendChild(card);
+  });
+}
+
+// ---- デイリーステージ ----
+$("btn-daily-stage").onclick = () => { renderDailyStageScreen(); showScreen("s-daily-stage"); };
+$("btn-daily-stage-back").onclick = () => { showScreen("s-camp-home"); updateCoinDisplays(); updateDailyBadges(); };
+function renderDailyStageScreen() {
+  Meta.ensureDaily();
+  updateCoinDisplays();
+  const stage = Meta.getDailyStage();
+  const cleared = Meta.isDailyStageClearedToday();
+  const reward = Math.round(stage.baseCoin * 2.5);
+  $("daily-stage-card").innerHTML = `
+    <div class="stage-emoji" style="font-size:3rem">${stage.emoji}</div>
+    <div class="stage-name" style="font-size:1.1rem">${stage.name}</div>
+    <p class="sub">${stage.desc}</p>
+    <p class="sub">難易度: デイリー(通常よりやや強化)</p>
+    <p class="sub">報酬: 🪙${reward}${cleared ? "(本日は受け取り済み)" : ""}</p>
+  `;
+  $("btn-daily-stage-launch").textContent = cleared ? "もう一度遊ぶ(報酬なし)" : "挑戦する";
+}
+$("btn-daily-stage-launch").onclick = () => {
+  if (Meta.getLoadout().length === 0) { alert("キャラ編成で出撃するキャラを選んでください"); return; }
+  startCampaignBattle(Meta.getDailyStage(), "daily", { isDaily: true });
+};

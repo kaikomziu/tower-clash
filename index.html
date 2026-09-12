@@ -58,8 +58,58 @@
       <button class="btn hero" id="btn-camp-stages">⚔️ ステージへ出撃</button>
       <button class="btn big" id="btn-camp-gacha">🎰 ガチャを引く</button>
       <button class="btn big" id="btn-camp-roster">📖 キャラ編成</button>
+    </div>
+    <div class="daily-row">
+      <button class="daily-btn" id="btn-daily-bonus">
+        <span class="db-icon">🎁</span><span class="db-label">ボーナス</span>
+        <span class="db-badge" id="badge-bonus" hidden>!</span>
+      </button>
+      <button class="daily-btn" id="btn-daily-missions">
+        <span class="db-icon">📋</span><span class="db-label">ミッション</span>
+        <span class="db-badge" id="badge-missions" hidden>!</span>
+      </button>
+      <button class="daily-btn" id="btn-daily-stage">
+        <span class="db-icon">🗓️</span><span class="db-label">デイリー</span>
+        <span class="db-badge" id="badge-dailystage" hidden>!</span>
+      </button>
+    </div>
+    <div class="menu-col">
       <button class="btn ghost" id="btn-online">🌐 オンライン対戦(サブ)</button>
     </div>
+  </section>
+
+  <!-- ===== デイリーボーナス ===== -->
+  <section class="screen" id="s-daily-bonus">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-daily-bonus-back">← もどる</button>
+      <div class="coin-badge">🪙 <span id="bonus-coin-val">0</span></div>
+    </div>
+    <h2>🎁 デイリーボーナス</h2>
+    <p class="sub" id="bonus-streak-text"></p>
+    <div class="bonus-calendar" id="bonus-calendar"></div>
+    <button class="btn hero" id="btn-claim-bonus">受け取る</button>
+  </section>
+
+  <!-- ===== デイリーミッション ===== -->
+  <section class="screen" id="s-daily-missions">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-daily-missions-back">← もどる</button>
+      <div class="coin-badge">🪙 <span id="missions-coin-val">0</span></div>
+    </div>
+    <h2>📋 デイリーミッション</h2>
+    <p class="sub">毎日リセットされる3つのミッション</p>
+    <div class="mission-list" id="mission-list"></div>
+  </section>
+
+  <!-- ===== デイリーステージ ===== -->
+  <section class="screen" id="s-daily-stage">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-daily-stage-back">← もどる</button>
+      <div class="coin-badge">🪙 <span id="dailystage-coin-val">0</span></div>
+    </div>
+    <h2>🗓️ デイリーステージ</h2>
+    <div class="daily-stage-card" id="daily-stage-card"></div>
+    <button class="btn hero" id="btn-daily-stage-launch">挑戦する</button>
   </section>
 
   <!-- ===== キャンペーン: ステージ選択 ===== -->

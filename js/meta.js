@@ -12,6 +12,7 @@ function metaDefault() {
     pity: 0,
     stageProgress: {}, // { [stageId]: { easy:true/false, normal:.., hard:.. } }
     loadout: STARTER_CHARS.slice(),
+    daily: null, // ensureDaily()で日付が変わるたびに生成し直す
   };
 }
 
@@ -90,6 +91,7 @@ const Meta = {
     } else {
       owned.rank++; rank = owned.rank;
     }
+    this.trackMission("gacha", 1);
     this.save();
     return { id, isNew, rank, refund, rarity };
   },
@@ -103,6 +105,78 @@ const Meta = {
     const results = [];
     for (let i = 0; i < 10; i++) results.push(this.pull());
     return results;
+  },
+
+  // ===== デイリー(日付が変わると自動リセット) =====
+  ensureDaily() {
+    const today = todayStr();
+    if (!this.data.daily) {
+      this.data.daily = { date: null, bonusClaimed: false, bonusStreak: 0, lastClaimDate: null, missions: [], dailyStageClearedDate: null };
+    }
+    const d = this.data.daily;
+    if (d.date !== today) {
+      d.date = today;
+      d.bonusClaimed = false;
+      d.missions = generateDailyMissions();
+      if (d.lastClaimDate && daysBetween(d.lastClaimDate, today) > 1) d.bonusStreak = 0;
+      this.save();
+    }
+  },
+
+  // デイリーボーナス受け取り。結果 { streak, reward } / 受け取り済みならnull
+  claimDailyBonus() {
+    this.ensureDaily();
+    const d = this.data.daily;
+    if (d.bonusClaimed) return null;
+    d.bonusStreak = (d.bonusStreak % DAILY_BONUS_TABLE.length) + 1;
+    const reward = DAILY_BONUS_TABLE[(d.bonusStreak - 1) % DAILY_BONUS_TABLE.length];
+    d.bonusClaimed = true;
+    d.lastClaimDate = todayStr();
+    this.addCoins(reward);
+    this.save();
+    return { streak: d.bonusStreak, reward };
+  },
+
+  trackMission(type, amount) {
+    this.ensureDaily();
+    let changed = false;
+    this.data.daily.missions.forEach((m) => {
+      if (m.type === type && !m.claimed && m.progress < m.target) {
+        m.progress = Math.min(m.target, m.progress + amount);
+        changed = true;
+      }
+    });
+    if (changed) this.save();
+  },
+  claimMission(idx) {
+    this.ensureDaily();
+    const m = this.data.daily.missions[idx];
+    if (!m || m.claimed || m.progress < m.target) return null;
+    m.claimed = true;
+    this.addCoins(m.reward);
+    this.save();
+    return m.reward;
+  },
+  hasClaimableMission() {
+    this.ensureDaily();
+    return this.data.daily.missions.some((m) => !m.claimed && m.progress >= m.target);
+  },
+
+  getDailyStage() {
+    this.ensureDaily();
+    return STAGES[dayIndexToday() % STAGES.length];
+  },
+  isDailyStageClearedToday() {
+    this.ensureDaily();
+    return this.data.daily.dailyStageClearedDate === todayStr();
+  },
+  // 本日まだ受け取っていなければtrueを返し、受け取り済みにする(コイン加算は呼び出し側でまとめて行う)
+  claimDailyStageReward() {
+    this.ensureDaily();
+    if (this.isDailyStageClearedToday()) return false;
+    this.data.daily.dailyStageClearedDate = todayStr();
+    this.save();
+    return true;
   },
 };
 
