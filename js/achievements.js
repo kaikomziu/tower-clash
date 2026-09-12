@@ -10,10 +10,11 @@ function allStagesClearedOn(data, diffKey) { return STAGES.every((s) => data.sta
 const ACHIEVEMENTS = [
   // ----- ステージ攻略 -----
   { id: "stage_clear_1", name: "はじめの一歩", desc: "はじめてステージをクリアする", emoji: "🌾", reward: 50, check: (s) => s.stagesCleared >= 1 },
-  { id: "stage_all_easy", name: "かんたん制覇", desc: "全5ステージをかんたんでクリアする", emoji: "🟢", reward: 150, check: (s, d) => allStagesClearedOn(d, "easy") },
-  { id: "stage_all_normal", name: "ふつう制覇", desc: "全5ステージをふつうでクリアする", emoji: "🟡", reward: 250, check: (s, d) => allStagesClearedOn(d, "normal") },
-  { id: "stage_all_hard", name: "むずかしい制覇", desc: "全5ステージをむずかしいでクリアする", emoji: "🔴", reward: 500, check: (s, d) => allStagesClearedOn(d, "hard") },
-  { id: "stage_final_hard", name: "竜殺し", desc: "最終ステージ「竜の巣窟」をむずかしいでクリアする", emoji: "🐲", reward: 300, check: (s, d) => d.stageProgress[4] && d.stageProgress[4].hard },
+  { id: "stage_all_easy", name: "かんたん制覇", desc: "全ステージをかんたんでクリアする", emoji: "🟢", reward: 150, check: (s, d) => allStagesClearedOn(d, "easy") },
+  { id: "stage_all_normal", name: "ふつう制覇", desc: "全ステージをふつうでクリアする", emoji: "🟡", reward: 250, check: (s, d) => allStagesClearedOn(d, "normal") },
+  { id: "stage_all_hard", name: "むずかしい制覇", desc: "全ステージをむずかしいでクリアする", emoji: "🔴", reward: 500, check: (s, d) => allStagesClearedOn(d, "hard") },
+  { id: "stage_final_hard", name: "竜殺し", desc: "「竜の巣窟」をむずかしいでクリアする", emoji: "🐲", reward: 300, check: (s, d) => d.stageProgress[4] && d.stageProgress[4].hard },
+  { id: "stage_ultimate_hard", name: "永劫を制する者", desc: "最終ステージ「永劫の試練場」をむずかしいでクリアする", emoji: "⏳", reward: 400, check: (s, d) => d.stageProgress[9] && d.stageProgress[9].hard },
   { id: "stage_cleared_10", name: "常連プレイヤー", desc: "ステージクリア回数の合計が10回に到達", emoji: "🎖️", reward: 100, check: (s) => s.stagesCleared >= 10 },
   { id: "stage_cleared_50", name: "歴戦の指揮官", desc: "ステージクリア回数の合計が50回に到達", emoji: "🏅", reward: 300, check: (s) => s.stagesCleared >= 50 },
   { id: "daily_stage_1", name: "デイリー初挑戦", desc: "デイリーステージをはじめてクリアする", emoji: "🗓️", reward: 80, check: (s) => s.dailyStageClears >= 1 },
