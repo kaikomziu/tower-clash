@@ -204,7 +204,7 @@ function showGachaResults(results) {
 }
 
 // ===== バトル =====
-const CG = { sim: null, rafId: null, lastTs: 0, simAcc: 0, placingChar: null, resultShown: false, stage: null, diffKey: null };
+const CG = { sim: null, rafId: null, lastTs: 0, simAcc: 0, placingChar: null, resultShown: false, stage: null, diffKey: null, paused: false };
 // 攻撃演出(与ダメージ数値・撃破エフェクト・タワー発射反動・凍結演出・古竜ノヴァのフラッシュ)。表示専用でsimの状態には影響しない
 function freshFx() { return { damageTexts: [], killBursts: [], freezeBursts: [], towerFlash: {}, novaFlash: 0, novaColor: "#fff" }; }
 CG.fx = freshFx();
@@ -223,6 +223,8 @@ function startCampaignBattle(stage, diffKey, opts) {
   CG.resultShown = false;
   CG.placingChar = null;
   CG.fx = freshFx();
+  CG.paused = false;
+  $("pause-overlay").hidden = true;
   $("camp-sell-panel").hidden = true;
   $("camp-place-hint").hidden = true;
   buildCampShopRow(loadout);
@@ -266,7 +268,7 @@ function getCBoardXY(evt) {
 }
 cCanvas.addEventListener("mousemove", (e) => { campHoverXY = getCBoardXY(e); });
 cCanvas.addEventListener("click", (e) => {
-  if (!CG.sim) return;
+  if (!CG.sim || CG.paused) return;
   const { x, y } = getCBoardXY(e);
   if (CG.placingChar) {
     const col = Math.floor(x / CCELL), row = Math.floor(y / CCELL);
@@ -329,12 +331,34 @@ document.querySelectorAll("#camp-speed-ctrl .speed-btn").forEach((btn) => {
 });
 updateCampSpeedButtons();
 
-$("btn-camp-quit").onclick = () => { CG.sim = null; showScreen("s-camp-home"); updateCoinDisplays(); };
+// ===== 一時停止(再開/最初から再挑戦/ホームに戻る) =====
+$("btn-camp-pause").onclick = () => {
+  if (!CG.sim || CG.sim.over) return;
+  CG.paused = true;
+  $("pause-overlay").hidden = false;
+};
+$("btn-pause-resume").onclick = () => {
+  CG.paused = false;
+  $("pause-overlay").hidden = true;
+};
+$("btn-pause-retry").onclick = () => {
+  $("pause-overlay").hidden = true;
+  CG.paused = false;
+  startCampaignBattle(CG.stage, CG.diffKey, { isDaily: CG.isDaily });
+};
+$("btn-pause-quit").onclick = () => {
+  $("pause-overlay").hidden = true;
+  CG.paused = false;
+  CG.sim = null;
+  showScreen("s-camp-home");
+  updateCoinDisplays();
+  updateDailyBadges();
+};
 
 function campLoop(ts) {
   const frameDt = Math.min(1.5, Math.max(0, (ts - CG.lastTs) / 1000));
   CG.lastTs = ts;
-  if (CG.sim) {
+  if (CG.sim && !CG.paused) {
     if (campAutoSkip && CG.sim.waveState === "prep") CG.sim.applySkipPrep();
     CG.simAcc += frameDt * campSpeedMul;
     let steps = 0;

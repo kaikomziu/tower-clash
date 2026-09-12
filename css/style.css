@@ -248,6 +248,17 @@ h2 { margin: 20px 0 6px; }
 .camp-prep { gap: 8px; margin-left: auto; }
 #camp-prep-text { font-size: 0.85rem; color: #facc15; }
 
+/* 一時停止 */
+.pause-overlay {
+  position: fixed; inset: 0; z-index: 90; background: rgba(5,8,20,0.82);
+  display: flex; align-items: center; justify-content: center; animation: veilFadeIn 0.15s ease-out both;
+}
+.pause-box {
+  background: #131c30; border: 1px solid #263252; border-radius: 18px; padding: 30px 28px;
+  display: flex; flex-direction: column; gap: 12px; align-items: stretch; min-width: 260px;
+}
+.pause-box h3 { margin: 0 0 8px; text-align: center; }
+
 /* 結果(キャンペーン) */
 .coin-earn { background: #1b2745; padding: 10px 18px; border-radius: 12px; font-weight: 700; color: #facc15; margin: 10px 0 24px; text-align: center; }
 
