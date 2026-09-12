@@ -95,6 +95,7 @@ function renderRoster() {
       <div class="char-name">${owned ? def.name : "？？？"}</div>
       <div class="char-rarity">${RARITY_LABEL[def.rarity]}${owned ? ` Rk${rank} Lv${level}` : ""}</div>
       ${owned ? `<div class="char-desc">${def.desc}</div>` : ""}
+      ${owned && def.specialDesc ? `<div class="char-special">${def.specialDesc}</div>` : ""}
     `;
     if (owned) {
       card.onclick = () => {

@@ -96,7 +96,7 @@ class TowerClashSim {
     if (!def || this.gold < def.cost) return false;
     if (!cellFree(col, row, this.towers)) return false;
     this.gold -= def.cost;
-    this.towers.push({ id: this._nextId++, col, row, type, cd: 0 });
+    this.towers.push({ id: this._nextId++, col, row, type, cd: 0, atkCount: 0 });
     return true;
   }
 
@@ -145,7 +145,7 @@ class TowerClashSim {
       }
     }
 
-    // 支援(buff)キャラの効果を先に集計
+    // 支援(buff)キャラの効果を先に集計(騎士王の特殊で射程バフも追加)
     const buffMap = {};
     for (const t of this.towers) {
       const def = this.charDefs[t.type];
@@ -155,9 +155,10 @@ class TowerClashSim {
         if (o === t) continue;
         const ox = o.col * CELL + CELL / 2, oy = o.row * CELL + CELL / 2;
         if (Math.hypot(ox - tx, oy - ty) <= def.range) {
-          if (!buffMap[o.id]) buffMap[o.id] = { dmgBonus: 0, cdBonus: 0 };
+          if (!buffMap[o.id]) buffMap[o.id] = { dmgBonus: 0, cdBonus: 0, rangeBonus: 0 };
           buffMap[o.id].dmgBonus += def.buffDmg || 0;
           buffMap[o.id].cdBonus += def.buffRate || 0;
+          if (def.special && def.special.kind === "rangeBuff") buffMap[o.id].rangeBonus += def.special.amount;
         }
       }
     }
@@ -168,32 +169,38 @@ class TowerClashSim {
       if (!def || def.kind === "buff") continue;
       t.cd -= dt;
       if (t.cd > 0) continue;
-      const buff = buffMap[t.id] || { dmgBonus: 0, cdBonus: 0 };
+      const buff = buffMap[t.id] || { dmgBonus: 0, cdBonus: 0, rangeBonus: 0 };
       const dmg = def.dmg * (1 + buff.dmgBonus);
       const cdTime = def.cooldown * (1 - Math.min(0.7, buff.cdBonus));
+      const effRange = def.range * (1 + (buff.rangeBonus || 0));
       const tx = t.col * CELL + CELL / 2, ty = t.row * CELL + CELL / 2;
 
       // 射程内で最も拠点に近い(進んでいる)敵を狙う
       let target = null;
       for (const e of this.enemies) {
         const p = pointOnPath(e.dist);
-        if (Math.hypot(p.x - tx, p.y - ty) <= def.range) { if (!target || e.dist > target.dist) target = e; }
+        if (Math.hypot(p.x - tx, p.y - ty) <= effRange) { if (!target || e.dist > target.dist) target = e; }
       }
       if (!target) continue;
       t.cd = cdTime;
+      t.atkCount = (t.atkCount || 0) + 1;
+      const special = def.special;
       const tp = pointOnPath(target.dist);
       this.projectiles.push({ id: this._nextId++, x: tx, y: ty, tx: tp.x, ty: tp.y, color: def.color, t: 0, life: 0.18 });
 
       if (def.kind === "splash") {
+        const isNova = special && special.kind === "novaEvery" && t.atkCount % special.n === 0;
+        const radius = isNova ? Infinity : def.splash;
         for (const e of this.enemies) {
           const ep = pointOnPath(e.dist);
-          if (Math.hypot(ep.x - tp.x, ep.y - tp.y) <= def.splash) {
+          if (Math.hypot(ep.x - tp.x, ep.y - tp.y) <= radius) {
             e.hp -= dmg;
             if (def.dotDmg) e.burn = { dps: def.dotDmg, t: def.dotDur };
           }
         }
       } else if (def.kind === "chain") {
         target.hp -= dmg;
+        let lastHit = target, hitCount = 1;
         const hit = new Set([target.id]);
         let lastPoint = tp, curDmg = dmg;
         for (let i = 1; i < def.chainCount; i++) {
@@ -207,31 +214,64 @@ class TowerClashSim {
           if (!next) break;
           curDmg *= def.chainFalloff;
           next.hp -= curDmg;
-          hit.add(next.id);
+          hit.add(next.id); hitCount++;
+          lastHit = next;
           const np = pointOnPath(next.dist);
           this.projectiles.push({ id: this._nextId++, x: lastPoint.x, y: lastPoint.y, tx: np.x, ty: np.y, color: def.color, t: 0, life: 0.16 });
           lastPoint = np;
         }
+        if (special && special.kind === "chainOverload" && hitCount >= special.minHits) lastHit.hp -= dmg * special.bonusMult;
       } else if (def.kind === "slow") {
         target.hp -= dmg;
-        if (!target.slow || target.slow.factor <= def.slow) target.slow = { factor: def.slow, t: def.slowDur };
+        if (special && special.kind === "freezeEvery" && t.atkCount % special.n === 0) {
+          target.slow = { factor: 1, t: special.dur };
+        } else if (!target.slow || target.slow.factor <= def.slow) {
+          target.slow = { factor: def.slow, t: def.slowDur };
+        }
       } else if (def.kind === "dot") {
         target.hp -= dmg;
-        target.burn = { dps: def.dotDmg * (1 + buff.dmgBonus), t: def.dotDur };
+        const spreadRadius = special && special.kind === "burnSpread" ? special.radius : 0;
+        target.burn = { dps: def.dotDmg * (1 + buff.dmgBonus), t: def.dotDur, spreadRadius };
       } else if (def.kind === "pull") {
         target.hp -= dmg;
         target.dist = Math.max(0, target.dist - def.pullDist);
+        if (special && special.kind === "stunOnPull") target.slow = { factor: 1, t: special.dur };
       } else {
-        target.hp -= dmg;
+        let finalDmg = dmg;
+        if (special && special.kind === "execute" && target.hp / target.hpMax <= special.threshold) finalDmg *= (1 + special.mult);
+        target.hp -= finalDmg;
+        if (special && special.kind === "doubleAttack" && Math.random() < special.chance) {
+          let target2 = null;
+          for (const e of this.enemies) {
+            const p = pointOnPath(e.dist);
+            if (Math.hypot(p.x - tx, p.y - ty) <= effRange) { if (!target2 || e.dist > target2.dist) target2 = e; }
+          }
+          if (target2) {
+            const tp2 = pointOnPath(target2.dist);
+            this.projectiles.push({ id: this._nextId++, x: tx, y: ty, tx: tp2.x, ty: tp2.y, color: def.color, t: 0, life: 0.18 });
+            target2.hp -= dmg;
+          }
+        }
       }
     }
 
-    // 死亡処理
+    // 死亡処理(業火の魔道士の特殊: 炎上中の敵が死ぬと周囲へ延焼)
     for (let i = this.enemies.length - 1; i >= 0; i--) {
-      if (this.enemies[i].hp <= 0) {
-        const def = ENEMY_DEFS[this.enemies[i].type];
+      const dead = this.enemies[i];
+      if (dead.hp <= 0) {
+        if (dead.burn && dead.burn.spreadRadius) {
+          const dp = pointOnPath(dead.dist);
+          for (const e of this.enemies) {
+            if (e === dead || e.burn) continue;
+            const ep = pointOnPath(e.dist);
+            if (Math.hypot(ep.x - dp.x, ep.y - dp.y) <= dead.burn.spreadRadius) {
+              e.burn = { dps: dead.burn.dps, t: dead.burn.t, spreadRadius: dead.burn.spreadRadius };
+            }
+          }
+        }
+        const def = ENEMY_DEFS[dead.type];
         this.gold += def.gold;
-        this.events.push({ k: "kill", type: this.enemies[i].type });
+        this.events.push({ k: "kill", type: dead.type });
         this.enemies.splice(i, 1);
       }
     }
