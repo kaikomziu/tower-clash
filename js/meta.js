@@ -19,6 +19,7 @@ function metaDefault() {
     achievements: {}, // { [achievementId]: true }
     currentTitle: null, // 装備中の称号(実績IDを流用。nullなら「指揮官」)
     playerLevel: 1, playerXp: 0, // 指揮官レベル(コイン獲得のたびに経験値が入る)
+    rankingName: "", // 世界ランキング登録時の表示名(端末に保存、次回登録時にも使い回す)
     stats: { // 実績判定に使う累計スタッツ
       stagesCleared: 0, dailyStageClears: 0, gachaPulls: 0, towersPlaced: 0,
       enemiesKilled: 0, wavesCleared: 0, coinsEarnedTotal: 0, levelUpsBought: 0,

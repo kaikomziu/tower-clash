@@ -13,7 +13,7 @@
 <meta name="twitter:card" content="summary">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8F%B0%3C/text%3E%3C/svg%3E">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<link rel="stylesheet" href="css/style.css?v=6">
+<link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
 <div id="app">
@@ -96,7 +96,27 @@
     </div>
     <div class="menu-col">
       <button class="btn ghost" id="btn-online">🌐 オンライン対戦(サブ)</button>
+      <button class="btn ghost" id="btn-ranking">🌍 世界ランキング</button>
     </div>
+  </section>
+
+  <!-- ===== 世界ランキング ===== -->
+  <section class="screen" id="s-ranking">
+    <div class="camp-topbar">
+      <button class="btn ghost small" id="btn-ranking-back">← もどる</button>
+    </div>
+    <h2>🌍 世界ランキング</h2>
+    <div class="ranking-tabs" id="ranking-tabs">
+      <button class="ranking-tab sel" data-key="power">⚡総合戦力</button>
+      <button class="ranking-tab" data-key="endless_wave">♾️エンドレス</button>
+      <button class="ranking-tab" data-key="boss_clears">👹討伐戦</button>
+    </div>
+    <div class="ranking-submit-row">
+      <input type="text" id="ranking-name-input" maxlength="12" placeholder="指揮官名(12文字まで)">
+      <button class="btn small" id="btn-ranking-submit">🚀 記録を登録</button>
+    </div>
+    <p class="sub" id="ranking-status-text"></p>
+    <div class="ranking-list" id="ranking-list"></div>
   </section>
 
   <!-- ===== 実績 ===== -->
@@ -353,15 +373,16 @@
   <div id="achievement-toast-container"></div>
 </div>
 
-<script src="js/version.js?v=11"></script>
-<script src="js/sound.js?v=11"></script>
-<script src="js/sim.js?v=11"></script>
-<script src="js/online.js?v=11"></script>
-<script src="js/campaign-data.js?v=11"></script>
-<script src="js/achievements.js?v=11"></script>
-<script src="js/meta.js?v=11"></script>
-<script src="js/campaign-sim.js?v=11"></script>
-<script src="js/main.js?v=11"></script>
-<script src="js/campaign-ui.js?v=11"></script>
+<script src="js/version.js?v=12"></script>
+<script src="js/sound.js?v=12"></script>
+<script src="js/sim.js?v=12"></script>
+<script src="js/online.js?v=12"></script>
+<script src="js/ranking.js?v=12"></script>
+<script src="js/campaign-data.js?v=12"></script>
+<script src="js/achievements.js?v=12"></script>
+<script src="js/meta.js?v=12"></script>
+<script src="js/campaign-sim.js?v=12"></script>
+<script src="js/main.js?v=12"></script>
+<script src="js/campaign-ui.js?v=12"></script>
 </body>
 </html>

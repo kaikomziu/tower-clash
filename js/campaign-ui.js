@@ -31,6 +31,67 @@ function showPlayerLevelToast(level) {
   setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 400); }, 3200);
 }
 
+// ===== 世界ランキング =====
+let RANKING_TAB = "power";
+const RANKING_TAB_EMOJI = { power: "⚡", endless_wave: "♾️", boss_clears: "👹" };
+$("btn-ranking").onclick = () => { openRankingScreen(); };
+$("btn-ranking-back").onclick = () => showScreen("s-camp-home");
+document.querySelectorAll("#ranking-tabs .ranking-tab").forEach((btn) => {
+  btn.onclick = () => {
+    RANKING_TAB = btn.dataset.key;
+    document.querySelectorAll("#ranking-tabs .ranking-tab").forEach((b) => b.classList.toggle("sel", b === btn));
+    loadRankingList();
+  };
+});
+$("btn-ranking-submit").onclick = async () => {
+  const name = $("ranking-name-input").value.trim();
+  if (!name) { $("ranking-status-text").textContent = "指揮官名を入力してください"; return; }
+  Meta.data.rankingName = name;
+  Meta.save();
+  $("btn-ranking-submit").disabled = true;
+  $("ranking-status-text").textContent = "登録中…";
+  try {
+    await Ranking.submit(name);
+    $("ranking-status-text").textContent = "✅登録しました!";
+    loadRankingList();
+  } catch (e) {
+    $("ranking-status-text").textContent = "❌登録に失敗しました。通信環境を確認してください";
+  } finally {
+    $("btn-ranking-submit").disabled = false;
+  }
+};
+function openRankingScreen() {
+  $("ranking-name-input").value = Meta.data.rankingName || "";
+  $("ranking-status-text").textContent = "";
+  showScreen("s-ranking");
+  loadRankingList();
+}
+async function loadRankingList() {
+  const list = $("ranking-list");
+  list.innerHTML = `<p class="sub">読み込み中…</p>`;
+  try {
+    const rows = await Ranking.fetchTop(RANKING_TAB, 50);
+    list.innerHTML = "";
+    if (rows.length === 0) { list.innerHTML = `<p class="sub">まだ記録がありません。最初の登録者になろう!</p>`; return; }
+    rows.forEach((r, i) => {
+      const row = document.createElement("div");
+      row.className = "ranking-row" + (i < 3 ? " top3" : "");
+      const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}位`;
+      row.innerHTML = `
+        <span class="ranking-rank">${medal}</span>
+        <span class="ranking-name">${escapeHtml(r.name)}</span>
+        <span class="ranking-value">${RANKING_TAB_EMOJI[RANKING_TAB]}${r[RANKING_TAB].toLocaleString()}</span>
+      `;
+      list.appendChild(row);
+    });
+  } catch (e) {
+    list.innerHTML = `<p class="sub">読み込みに失敗しました。通信環境を確認してください</p>`;
+  }
+}
+function escapeHtml(s) {
+  return (s || "").toString().replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 // ===== タイトル→キャンペーンホーム =====
 $("btn-campaign").onclick = () => { updateCoinDisplays(); updateDailyBadges(); updatePowerDisplays(); showScreen("s-camp-home"); };
 $("btn-camp-home-back").onclick = () => showScreen("s-title");

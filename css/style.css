@@ -299,6 +299,27 @@ h2 { margin: 20px 0 6px; }
 .mission-foot { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; color: #9fb0cc; }
 .mission-reward { color: #facc15; font-weight: 700; }
 
+/* 世界ランキング */
+.ranking-tabs { display: flex; gap: 8px; width: 100%; max-width: 480px; margin-bottom: 12px; }
+.ranking-tab {
+  flex: 1; padding: 9px 6px; border-radius: 12px; border: 2px solid #263252; background: #16213d;
+  color: #9fb0cc; cursor: pointer; font-size: 0.85rem; font-weight: 700;
+}
+.ranking-tab.sel { background: #3a6bff; color: #0c1220; border-color: #3a6bff; }
+.ranking-submit-row { display: flex; gap: 8px; width: 100%; max-width: 480px; margin-bottom: 6px; }
+.ranking-submit-row input {
+  flex: 1; padding: 9px 12px; border-radius: 10px; border: 2px solid #263252; background: #16213d;
+  color: #e7edf7; font-size: 0.9rem;
+}
+.ranking-list { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 480px; margin-top: 10px; }
+.ranking-row {
+  display: flex; align-items: center; gap: 12px; background: #131c30; border-radius: 12px; padding: 10px 16px;
+}
+.ranking-row.top3 { background: #1b2745; box-shadow: 0 0 0 2px #facc15 inset; }
+.ranking-rank { width: 44px; font-weight: 800; color: #7dd3fc; }
+.ranking-name { flex: 1; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ranking-value { color: #facc15; font-weight: 700; }
+
 /* デイリーステージ */
 .daily-stage-card {
   background: #131c30; border-radius: 16px; padding: 22px; width: 100%; max-width: 420px;
